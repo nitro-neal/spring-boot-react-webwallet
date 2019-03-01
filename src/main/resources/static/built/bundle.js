@@ -30109,7 +30109,7 @@ function (_React$Component) {
 
     _this = _possibleConstructorReturn(this, _getPrototypeOf(App).call(this, props));
     _this.state = {
-      employees: []
+      message: 'w'
     };
     return _this;
   } //componentDidMount is the API invoked after React renders a component in the DOM.
@@ -30120,74 +30120,56 @@ function (_React$Component) {
     value: function componentDidMount() {
       var _this2 = this;
 
-      client({
-        method: 'GET',
-        path: '/api/employees'
-      }).done(function (response) {
-        _this2.setState({
-          employees: response.entity._embedded.employees
+      fetch('http://localhost:8080/setfingerprint', {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          fingerprint: '123'
+        })
+      }).then(function (response) {
+        console.log(response);
+        client({
+          method: 'GET',
+          path: '/initwallet'
+        }).done(function (response) {
+          console.log(response);
+
+          _this2.setState({
+            message: response.entity.message
+          });
         });
-      });
+      }); //		client({method: 'GET', path: '/initwallet'}).done(response => {
+      //			console.log(response)
+      //			this.setState({message: response.entity.message});
+      //			//this.setState({output: response});
+      //			//this.setState({employees: response.entity._embedded.employees});
+      //
+      //		});
     }
   }, {
     key: "render",
     value: function render() {
-      return React.createElement(EmployeeList, {
-        employees: this.state.employees
-      });
+      return React.createElement("div", null, "Message: ", this.state.message) //<MessageFormat message={this.state.message}/>
+      //{this.state.message}
+      ;
     }
   }]);
 
   return App;
-}(React.Component);
+}(React.Component); //class MessageFormat extends React.Component{
+//	render() {
+//			const msg = this.props.message;
+//		return (
+//			<h1> Wallet Message: </h1>
+//			{msg}
+//			//<p>{this.props.message}</p>
+//		)
+//	}
+//}
 
-var EmployeeList =
-/*#__PURE__*/
-function (_React$Component2) {
-  _inherits(EmployeeList, _React$Component2);
-
-  function EmployeeList() {
-    _classCallCheck(this, EmployeeList);
-
-    return _possibleConstructorReturn(this, _getPrototypeOf(EmployeeList).apply(this, arguments));
-  }
-
-  _createClass(EmployeeList, [{
-    key: "render",
-    value: function render() {
-      var employees = this.props.employees.map(function (employee) {
-        return React.createElement(Employee, {
-          key: employee._links.self.href,
-          employee: employee
-        });
-      });
-      return React.createElement("table", null, React.createElement("tbody", null, React.createElement("tr", null, React.createElement("th", null, "First Name"), React.createElement("th", null, "Last Name"), React.createElement("th", null, "Description")), employees));
-    }
-  }]);
-
-  return EmployeeList;
-}(React.Component);
-
-var Employee =
-/*#__PURE__*/
-function (_React$Component3) {
-  _inherits(Employee, _React$Component3);
-
-  function Employee() {
-    _classCallCheck(this, Employee);
-
-    return _possibleConstructorReturn(this, _getPrototypeOf(Employee).apply(this, arguments));
-  }
-
-  _createClass(Employee, [{
-    key: "render",
-    value: function render() {
-      return React.createElement("tr", null, React.createElement("td", null, this.props.employee.firstName), React.createElement("td", null, this.props.employee.lastName), React.createElement("td", null, this.props.employee.description));
-    }
-  }]);
-
-  return Employee;
-}(React.Component);
 
 ReactDOM.render(React.createElement(App, null), document.getElementById('react'));
 
