@@ -1,38 +1,72 @@
 const React = require('react');
 const ReactDOM = require('react-dom');
+const Fingerprint2 = require('fingerprintjs2')
 const client = require('./client');
+
+var that;
 
 class App extends React.Component {
 
+    initWallet(fingerprint) {
+        fetch('http://localhost:8080/initwallet', {
+          method: "GET",
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'Fingerprint': fingerprint
+          }
+
+          }).then(function(response) {
+              console.log(response.status);     //=> number 100–599
+              console.log(response.statusText); //=> String
+              console.log(response.headers);    //=> Headers
+              console.log(response.url);        //=> String
+          }, function(error) {
+              console.log(error.message); //=> String
+        });
+    }
+
 	constructor(props) {
 		super(props);
-		this.state = {message: 'w'};
+		this.state = {message: '...', fingerprint: '-1'};
 	}
 
     //componentDidMount is the API invoked after React renders a component in the DOM.
 	componentDidMount() {
-        fetch('http://localhost:8080/setfingerprint', {
-          method: 'POST',
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            fingerprint: '123'
-          })
-        }).then(response => {
-            console.log(response)
-            client({method: 'GET', path: '/initwallet'}).done(response => {
-                console.log(response)
-                this.setState({message: response.entity.message});
-            });
-        });
+        that = this;
+
+	    if (window.requestIdleCallback) {
+            requestIdleCallback(function () {
+                Fingerprint2.get(function (components) {
+                  console.log(components) // an array of components: {key: ..., value: ...}
+                  var values = components.map(function (component) { return component.value })
+                  var murmur = Fingerprint2.x64hash128(values.join(''), 31)
+                  console.log(murmur) // an array of components: {key: ..., value: ...}
+                  that.setState({fingerprint: murmur},() => {
+                    that.initWallet(murmur);
+                  })
+                })
+            })
+        } else {
+            setTimeout(function () {
+                Fingerprint2.get(function (components) {
+                  console.log(components) // an array of components: {key: ..., value: ...}
+                  var values = components.map(function (component) { return component.value })
+                  var murmur = Fingerprint2.x64hash128(values.join(''), 31)
+                  console.log(murmur) // an array of components: {key: ..., value: ...}
+                  that.setState({fingerprint: murmur},() => {
+                    that.initWallet(murmur);
+                  })
+                })
+            }, 500)
+        }
 	}
 
 	render() {
 		return (
           <div>
             Message: {this.state.message}
+            Fingerprint: {this.state.fingerprint}
           </div>
 		)
 	}
