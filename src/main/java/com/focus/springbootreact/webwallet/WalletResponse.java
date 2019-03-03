@@ -1,14 +1,13 @@
 package com.focus.springbootreact.webwallet;
 
+import lombok.Builder;
+import lombok.Getter;
+
+@Getter
+@Builder
 public class WalletResponse {
 
-    private final String message;
-
-    public WalletResponse(String message) {
-        this.message = message;
-    }
-
-    public String getMessage() {
-        return this.message;
-    }
+    private String message;
+    private String receiveAddress;
+    private String balance;
 }

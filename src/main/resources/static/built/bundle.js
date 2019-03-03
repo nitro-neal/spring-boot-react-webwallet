@@ -31578,7 +31578,9 @@ function (_React$Component) {
     _this = _possibleConstructorReturn(this, _getPrototypeOf(App).call(this, props));
     _this.state = {
       message: '...',
-      fingerprint: '-1'
+      fingerprint: '...',
+      receiveAddress: '...',
+      balance: '...'
     };
     return _this;
   } //componentDidMount is the API invoked after React renders a component in the DOM.
@@ -31628,9 +31630,55 @@ function (_React$Component) {
       }
     }
   }, {
+    key: "balanceClick",
+    value: function balanceClick(fingerprint) {
+      fetch('http://localhost:8080/getBalance', {
+        method: "GET",
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'Fingerprint': fingerprint
+        }
+      }).then(function (response) {
+        return response.json();
+      }).then(function (response) {
+        console.log(response);
+        that.setState({
+          balance: response.balance
+        });
+      }, function (error) {
+        console.log(error.message);
+      });
+    }
+  }, {
+    key: "receiveClick",
+    value: function receiveClick(fingerprint) {
+      fetch('http://localhost:8080/getReceiveAddress', {
+        method: "GET",
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'Fingerprint': fingerprint
+        }
+      }).then(function (response) {
+        return response.json();
+      }).then(function (response) {
+        console.log(response);
+        that.setState({
+          receiveAddress: response.receiveAddress
+        });
+      }, function (error) {
+        console.log(error.message);
+      });
+    }
+  }, {
     key: "render",
     value: function render() {
-      return React.createElement("div", null, "Message: ", this.state.message, "Fingerprint: ", this.state.fingerprint);
+      return React.createElement("div", null, React.createElement("p", null, " Message: ", this.state.message, " "), React.createElement("p", null, " Fingerprint: ", this.state.fingerprint, " "), React.createElement("p", null, " Receive Address : ", this.state.receiveAddress, " "), React.createElement("p", null, " Receive Address : ", this.state.balance, " "), React.createElement("br", null), React.createElement("button", {
+        onClick: this.receiveClick.bind(null, this.state.fingerprint)
+      }, " Receive TBTC"), React.createElement("br", null), React.createElement("button", {
+        onClick: this.balanceClick.bind(null, this.state.fingerprint)
+      }, " Receive Balance"));
     }
   }]);
 

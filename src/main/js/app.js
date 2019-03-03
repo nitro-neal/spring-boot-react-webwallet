@@ -28,7 +28,7 @@ class App extends React.Component {
 
 	constructor(props) {
 		super(props);
-		this.state = {message: '...', fingerprint: '-1'};
+		this.state = {message: '...', fingerprint: '...', receiveAddress: '...', balance: '...'};
 	}
 
     //componentDidMount is the API invoked after React renders a component in the DOM.
@@ -62,11 +62,65 @@ class App extends React.Component {
         }
 	}
 
+    balanceClick(fingerprint) {
+        fetch('http://localhost:8080/getBalance', {
+          method: "GET",
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'Fingerprint': fingerprint
+          }
+
+          })
+          .then(response => response.json())
+          .then(function(response) {
+              console.log(response);
+              that.setState({balance: response.balance});
+          }, function(error) {
+              console.log(error.message);
+        });
+    }
+
+    receiveClick(fingerprint) {
+        fetch('http://localhost:8080/getReceiveAddress', {
+          method: "GET",
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'Fingerprint': fingerprint
+          }
+
+          })
+          .then(response => response.json())
+          .then(function(response) {
+              console.log(response);
+              that.setState({receiveAddress: response.receiveAddress});
+          }, function(error) {
+              console.log(error.message);
+        });
+    }
+
 	render() {
 		return (
           <div>
-            Message: {this.state.message}
-            Fingerprint: {this.state.fingerprint}
+            <p> Message: {this.state.message} </p>
+            <p> Fingerprint: {this.state.fingerprint} </p>
+            <p> Receive Address : {this.state.receiveAddress} </p>
+            <p> Receive Address : {this.state.balance} </p>
+            <br/>
+
+             <button onClick = {
+                      this.receiveClick.bind(null, this.state.fingerprint)
+                  } > Receive TBTC
+              </button>
+
+              <br/>
+
+               <button onClick = {
+                        this.balanceClick.bind(null, this.state.fingerprint)
+                    } > Receive Balance
+                </button>
+
           </div>
 		)
 	}
