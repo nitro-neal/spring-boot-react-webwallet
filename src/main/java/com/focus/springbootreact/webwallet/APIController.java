@@ -11,6 +11,9 @@ import org.bitcoinj.wallet.listeners.KeyChainEventListener;
 import org.bitcoinj.wallet.listeners.ScriptsChangeEventListener;
 import org.bitcoinj.wallet.listeners.WalletCoinsReceivedEventListener;
 import org.bitcoinj.wallet.listeners.WalletCoinsSentEventListener;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.File;
@@ -18,20 +21,23 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutionException;
 
 @RestController
 public class APIController {
 
+    @Autowired
+    SimpMessagingTemplate websocket;
+
     Map<String, WalletAppKit> wallets = new HashMap<>();
-    Map<String, WalletStat> walletStats = new HashMap<>();
+    Map<String, WalletState> walletStates = new HashMap<>();
 
     @RequestMapping(value = "/initwallet", method = RequestMethod.GET)
-    public WalletResponse initwallet(@RequestHeader(value = "Fingerprint", required = true) String fingerprint) {
+    public ResponseEntity<String> initwallet(@RequestHeader(value = "Fingerprint", required = true) String fingerprint) {
         System.out.println("initwallet called for fingerprint: " + fingerprint);
 
         if(wallets.get(fingerprint) != null) {
-            return WalletResponse.builder().message("Wallet already exists and is in ready state").build();
+            sendWebWalletUpdate(fingerprint);
+            return ResponseEntity.ok().build();
         }
 
         Runnable r = new Runnable() {
@@ -42,59 +48,42 @@ public class APIController {
 
         new Thread(r).start();
 
-        return WalletResponse.builder().message("Wallet creation started").build();
-    }
-
-    //TODO: Implement sockets and fix DownloadProgressTracker
-    @RequestMapping(value = "/getWalletDownloadProgress", method = RequestMethod.GET)
-    public WalletResponse getWalletDownloadProgress(@RequestHeader(value = "Fingerprint", required = true) String fingerprint) {
-        System.out.println("getWalletDownloadProgress called for fingerprint: " + fingerprint);
-
-        if(wallets.get(fingerprint) == null) {
-            throw new RuntimeException("Wallet does not exist!");
-        }
-
-        return WalletResponse.builder().message("downloadpercent: " + walletStats.get(fingerprint).downloadPercent).build();
-    }
-
-    @RequestMapping(value = "/getReceiveAddress", method = RequestMethod.GET)
-    public WalletResponse getReceiveAddress(@RequestHeader(value = "Fingerprint", required = true) String fingerprint) {
-        System.out.println("getReceiveAddress called for fingerprint: " + fingerprint);
-
-        if(wallets.get(fingerprint) == null) {
-            throw new RuntimeException("Wallet does not exist!");
-        }
-
-        return WalletResponse.builder().receiveAddress(wallets.get(fingerprint).wallet().freshReceiveAddress().toString()).build();
-    }
-
-    @RequestMapping(value = "/getBalance", method = RequestMethod.GET)
-    public WalletResponse getBalance(@RequestHeader(value = "Fingerprint", required = true) String fingerprint) {
-        System.out.println("getBalance called for fingerprint: " + fingerprint);
-
-        if(wallets.get(fingerprint) == null) {
-            throw new RuntimeException("Wallet does not exist!");
-        }
-
-        return WalletResponse.builder().balance(wallets.get(fingerprint).wallet().getBalance().toFriendlyString()).build();
+        return ResponseEntity.ok().build();
     }
 
     private void createWalletKit(String fingerprint) {
         NetworkParameters params = TestNet3Params.get();
-        WalletAppKit kit = new WalletAppKit(params, new File("."), "walletappkit-" + fingerprint);
-        wallets.put(fingerprint, kit);
-        walletStats.put(fingerprint, new WalletStat());
 
+        WalletAppKit kit = new WalletAppKit(params, new File("."), "walletappkit-" + fingerprint) {
+            @Override
+            protected void onSetupCompleted() {
+//                 This is called in a background thread after startAndWait is called
+//                if (wallet().getKeyChainGroupSize() < 1)
+//                    wallet().importKey(new ECKey());
+                WalletState walletState = WalletState.builder()
+                        .message("New Wallet")
+                        .balance(wallet().getBalance().toFriendlyString())
+                        .receiveAddress(wallet().freshReceiveAddress().toString())
+                        .build();
+                walletStates.put(fingerprint, walletState);
+                sendWebWalletUpdate(fingerprint);
+                System.out.println("Wallet Setup Complete. Waiting for blockchain download..");
+            }
+        };
+
+        wallets.put(fingerprint, kit);
+
+        //TODO: This doesn't work
         DownloadProgressTracker bListener = new DownloadProgressTracker() {
             @Override
             public void doneDownload() {
-                System.out.println("blockchain downloaded");
+                System.out.println("!!!!!!!!!!!!!!!!!!!!!!!!!!blockchain downloaded");
             }
 
             @Override
             public void progress(double pct, int blocksSoFar, Date date) {
                 System.out.println("!!!!!!!!!!!Progress %: " + pct);
-                walletStats.get(fingerprint).downloadPercent = pct;
+                //walletStats.get(fingerprint).downloadPercent = pct;
 
             }
         };
@@ -104,16 +93,23 @@ public class APIController {
         kit.startAsync();
         kit.awaitRunning();
 
-        addListeners(kit);
-
+        addListeners(kit, fingerprint);
     }
 
-    private void addListeners(WalletAppKit kit) {
+    private void addListeners(WalletAppKit kit, String fingerprint) {
         kit.wallet().addCoinsReceivedEventListener(new WalletCoinsReceivedEventListener() {
             @Override
             public void onCoinsReceived(Wallet wallet, Transaction tx, Coin prevBalance, Coin newBalance) {
                 System.out.println("-----> coins resceived: " + tx);
                 System.out.println("received: " + tx.getValue(wallet));
+                System.out.println("prev balance: " + prevBalance.toFriendlyString());
+                System.out.println("new balance: " + newBalance.toFriendlyString());
+
+                walletStates.get(fingerprint).setBalance(newBalance.toFriendlyString());
+                System.out.println("ABOUT TO SEND DATA: " + walletStates.get(fingerprint));
+                System.out.println("About To Send Balance:" + walletStates.get(fingerprint).getBalance());
+                sendWebWalletUpdate(fingerprint);
+
             }
         });
 
@@ -148,6 +144,11 @@ public class APIController {
         });
 
         System.out.println("send money to: " + kit.wallet().freshReceiveAddress().toString());
+    }
+
+    private void sendWebWalletUpdate(String fingerprint) {
+        System.out.println("SENDING WEBSOCKET MESSAGE");
+        websocket.convertAndSend(WebSocketConfiguration.MESSAGE_PREFIX + "/updateWallet-" + fingerprint, walletStates.get(fingerprint));
     }
 
     private void startKitDemo() {

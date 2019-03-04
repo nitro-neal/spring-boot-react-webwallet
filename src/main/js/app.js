@@ -3,9 +3,24 @@ const ReactDOM = require('react-dom');
 const Fingerprint2 = require('fingerprintjs2')
 const client = require('./client');
 
+var stompClient = require('./websocket-listener')
 var that;
+var fp;
 
 class App extends React.Component {
+
+    walletUpdate(payload) {
+        console.log("Walletupdate called with MYPAYLOAD:" + payload)
+        var payloadJson = JSON.parse(payload.body)
+
+        that.setState({receiveAddress: payloadJson.receiveAddress});
+        that.setState({balance: payloadJson.balance});
+    }
+
+    stompClientReady() {
+        that.setState({fingerprint: fp});
+        that.initWallet(fp);
+    }
 
     initWallet(fingerprint) {
         fetch('http://localhost:8080/initwallet', {
@@ -18,9 +33,6 @@ class App extends React.Component {
 
           }).then(function(response) {
               console.log(response.status);     //=> number 100–599
-              console.log(response.statusText); //=> String
-              console.log(response.headers);    //=> Headers
-              console.log(response.url);        //=> String
           }, function(error) {
               console.log(error.message); //=> String
         });
@@ -38,13 +50,17 @@ class App extends React.Component {
 	    if (window.requestIdleCallback) {
             requestIdleCallback(function () {
                 Fingerprint2.get(function (components) {
-                  console.log(components) // an array of components: {key: ..., value: ...}
-                  var values = components.map(function (component) { return component.value })
-                  var murmur = Fingerprint2.x64hash128(values.join(''), 31)
-                  console.log(murmur) // an array of components: {key: ..., value: ...}
-                  that.setState({fingerprint: murmur},() => {
-                    that.initWallet(murmur);
-                  })
+                  console.log(components);
+                  var values = components.map(function (component) { return component.value });
+                  var murmur = Fingerprint2.x64hash128(values.join(''), 31);
+                  console.log(murmur);
+
+                  fp = murmur;
+
+                  stompClient.register([
+                      {route: '/topic/updateWallet-' + murmur, callback: that.walletUpdate}
+                  ], that.stompClientReady);
+
                 })
             })
         } else {
@@ -54,51 +70,16 @@ class App extends React.Component {
                   var values = components.map(function (component) { return component.value })
                   var murmur = Fingerprint2.x64hash128(values.join(''), 31)
                   console.log(murmur) // an array of components: {key: ..., value: ...}
-                  that.setState({fingerprint: murmur},() => {
-                    that.initWallet(murmur);
-                  })
+
+                  fp = murmur;
+
+                  stompClient.register([
+                      {route: '/topic/updateWallet-' + murmur, callback: that.walletUpdate}
+                  ], that.stompClientReady);
                 })
             }, 500)
         }
 	}
-
-    balanceClick(fingerprint) {
-        fetch('http://localhost:8080/getBalance', {
-          method: "GET",
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-            'Fingerprint': fingerprint
-          }
-
-          })
-          .then(response => response.json())
-          .then(function(response) {
-              console.log(response);
-              that.setState({balance: response.balance});
-          }, function(error) {
-              console.log(error.message);
-        });
-    }
-
-    receiveClick(fingerprint) {
-        fetch('http://localhost:8080/getReceiveAddress', {
-          method: "GET",
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-            'Fingerprint': fingerprint
-          }
-
-          })
-          .then(response => response.json())
-          .then(function(response) {
-              console.log(response);
-              that.setState({receiveAddress: response.receiveAddress});
-          }, function(error) {
-              console.log(error.message);
-        });
-    }
 
 	render() {
 		return (
@@ -109,17 +90,7 @@ class App extends React.Component {
             <p> Receive Address : {this.state.balance} </p>
             <br/>
 
-             <button onClick = {
-                      this.receiveClick.bind(null, this.state.fingerprint)
-                  } > Receive TBTC
-              </button>
 
-              <br/>
-
-               <button onClick = {
-                        this.balanceClick.bind(null, this.state.fingerprint)
-                    } > Receive Balance
-                </button>
 
           </div>
 		)
