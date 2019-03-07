@@ -38659,37 +38659,7 @@ var client = __webpack_require__(/*! ./client */ "./src/main/js/client.js");
 var stompClient = __webpack_require__(/*! ./websocket-listener */ "./src/main/js/websocket-listener.js");
 
 var that;
-var fp; //function animateValue(id, start, end, duration) {
-//    // assumes integer values for start and end
-//
-//    var obj = document.getElementById(id);
-//    var range = end - start;
-//    // no timer shorter than 50ms (not really visible any way)
-//    var minTimer = 50;
-//    // calc step time to show all interediate values
-//    var stepTime = Math.abs(Math.floor(duration / range));
-//
-//    // never go below minTimer
-//    stepTime = Math.max(stepTime, minTimer);
-//
-//    // get current time and calculate desired end time
-//    var startTime = new Date().getTime();
-//    var endTime = startTime + duration;
-//    var timer;
-//
-//    function run() {
-//        var now = new Date().getTime();
-//        var remaining = Math.max((endTime - now) / duration, 0);
-//        var value = Math.round(end - (remaining * range));
-//        obj.innerHTML = value;
-//        if (value == end) {
-//            clearInterval(timer);
-//        }
-//    }
-//
-//    timer = setInterval(run, stepTime);
-//    run();
-//}
+var fp;
 
 var App =
 /*#__PURE__*/
@@ -38707,7 +38677,11 @@ function (_React$Component) {
       message: '...',
       fingerprint: '...',
       receiveAddress: '...',
-      balance: '...'
+      balance: '...',
+      transactions: [{
+        "amount": "1"
+      }],
+      hastransactions: false
     };
     return _this;
   }
@@ -38723,6 +38697,15 @@ function (_React$Component) {
       that.setState({
         balance: payloadJson.balance
       });
+
+      if (payloadJson.transactions.length > 0) {
+        that.setState({
+          hastransactions: true
+        });
+        that.setState({
+          transactions: payloadJson.transactions
+        });
+      }
     }
   }, {
     key: "stompClientReady",
@@ -38752,9 +38735,6 @@ function (_React$Component) {
     key: "handleSubmit",
     value: function handleSubmit(event) {
       event.preventDefault(); //const data = new FormData(event.target);
-      //        var data = new FormData();
-      //        data.append('amount', event.target[0].value)
-      //        data.append('address', event.target[1].value)
 
       var data = JSON.stringify({
         "amount": event.target[0].value,
@@ -38835,7 +38815,10 @@ function (_React$Component) {
         id: "address",
         name: "address",
         type: "text"
-      }), React.createElement("button", null, "Send data!")));
+      }), React.createElement("button", null, "Send data!")), React.createElement("br", null), React.createElement("br", null), "if (this.state.hastransactions) ", this.state.transactions.map(function (t) {
+        return React.createElement("p", null, t.amount);
+      }) //this.state.transactions[0].amount
+      , React.createElement("br", null));
     }
   }]);
 

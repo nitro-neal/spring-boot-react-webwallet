@@ -12,7 +12,7 @@ class App extends React.Component {
 	constructor(props) {
 		super(props);
 		this.handleSubmit = this.handleSubmit.bind(this);
-		this.state = {message: '...', fingerprint: '...', receiveAddress: '...', balance: '...'};
+		this.state = {message: '...', fingerprint: '...', receiveAddress: '...', balance: '...', transactions: [{"amount" : "1"}], hastransactions : false};
 	}
 
 	walletUpdate(payload) {
@@ -21,6 +21,10 @@ class App extends React.Component {
 
             that.setState({receiveAddress: payloadJson.receiveAddress});
             that.setState({balance: payloadJson.balance});
+            if(payloadJson.transactions.length > 0){
+                that.setState({hastransactions: true})
+                that.setState({transactions: payloadJson.transactions})
+            }
         }
 
     stompClientReady() {
@@ -123,6 +127,19 @@ class App extends React.Component {
 
                 <button>Send data!</button>
             </form>
+
+            <br/>
+            <br/>
+
+            if (this.state.hastransactions) {
+                this.state.transactions.map((t) => <p>{ t.amount }</p>)
+                //this.state.transactions[0].amount
+            }
+
+
+            <br/>
+
+
           </div>
 		)
 	}

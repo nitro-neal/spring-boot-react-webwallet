@@ -18,10 +18,8 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.File;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.time.LocalDateTime;
+import java.util.*;
 import java.util.concurrent.Executor;
 
 @RestController
@@ -94,8 +92,8 @@ public class APIController {
             @Override
             public void run() {
                 // The wallet has changed now, it'll get auto saved shortly or when the app shuts down.
-                walletStates.get(fingerprint).setBalance(wallets.get(fingerprint).wallet().getBalance().toFriendlyString());
-                sendWebWalletUpdate(fingerprint);
+                //walletStates.get(fingerprint).setBalance(wallets.get(fingerprint).wallet().getBalance().toFriendlyString());
+                //sendWebWalletUpdate(fingerprint);
                 System.out.println("Sent coins onwards! Transaction hash is " + finalSendResult.tx.getHashAsString());
             }
         }, new Executor() {
@@ -117,6 +115,7 @@ public class APIController {
                         .message("New Wallet")
                         .balance(wallet().getBalance().toFriendlyString())
                         .receiveAddress(wallet().freshReceiveAddress().toBase58())
+                        .transactions(new ArrayList<>())
                         .build();
                 walletStates.put(fingerprint, walletState);
                 sendWebWalletUpdate(fingerprint);
@@ -161,6 +160,16 @@ public class APIController {
 //                Coin amountSentToMe = tx.getValueSentToMe(kit.wallet());
 //                Coin myNewBalance = amountSentToMe.plus(Coin.parseCoin(walletStates.get(fingerprint).getBalance()));
 
+                WalletTransaction transaction = WalletTransaction.builder()
+                        .transactionType("receive")
+                        .transactionId(tx.getHashAsString())
+                        .timestamp(LocalDateTime.now())
+                        .address(tx.getInputs().stream().findFirst().get().getOutpoint().getHash().toString())
+                        .amount(newBalance.minus(prevBalance).toFriendlyString())
+                        .confirmations(0)
+                        .build();
+
+                walletStates.get(fingerprint).getTransactions().add(transaction);
                 walletStates.get(fingerprint).setBalance(newBalance.toFriendlyString());
                 sendWebWalletUpdate(fingerprint);
             }
@@ -170,6 +179,17 @@ public class APIController {
             @Override
             public void onCoinsSent(Wallet wallet, Transaction tx, Coin prevBalance, Coin newBalance) {
                 System.out.println("coins sent");
+
+                WalletTransaction transaction = WalletTransaction.builder()
+                        .transactionType("send")
+                        .transactionId(tx.getHashAsString())
+                        .timestamp(LocalDateTime.now())
+                        .address(tx.getOutput(0l).getHash().toString())
+                        .amount(prevBalance.minus(newBalance).toFriendlyString())
+                        .confirmations(0)
+                        .build();
+
+                walletStates.get(fingerprint).getTransactions().add(transaction);
                 walletStates.get(fingerprint).setBalance(newBalance.toFriendlyString());
                 sendWebWalletUpdate(fingerprint);
             }
