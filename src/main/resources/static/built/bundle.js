@@ -38634,15 +38634,15 @@ function _typeof(obj) { if (typeof Symbol === "function" && typeof Symbol.iterat
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
-function _possibleConstructorReturn(self, call) { if (call && (_typeof(call) === "object" || typeof call === "function")) { return call; } return _assertThisInitialized(self); }
-
-function _assertThisInitialized(self) { if (self === void 0) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return self; }
-
-function _getPrototypeOf(o) { _getPrototypeOf = Object.setPrototypeOf ? Object.getPrototypeOf : function _getPrototypeOf(o) { return o.__proto__ || Object.getPrototypeOf(o); }; return _getPrototypeOf(o); }
-
 function _defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } }
 
 function _createClass(Constructor, protoProps, staticProps) { if (protoProps) _defineProperties(Constructor.prototype, protoProps); if (staticProps) _defineProperties(Constructor, staticProps); return Constructor; }
+
+function _possibleConstructorReturn(self, call) { if (call && (_typeof(call) === "object" || typeof call === "function")) { return call; } return _assertThisInitialized(self); }
+
+function _getPrototypeOf(o) { _getPrototypeOf = Object.setPrototypeOf ? Object.getPrototypeOf : function _getPrototypeOf(o) { return o.__proto__ || Object.getPrototypeOf(o); }; return _getPrototypeOf(o); }
+
+function _assertThisInitialized(self) { if (self === void 0) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return self; }
 
 function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function"); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, writable: true, configurable: true } }); if (superClass) _setPrototypeOf(subClass, superClass); }
 
@@ -38659,12 +38659,58 @@ var client = __webpack_require__(/*! ./client */ "./src/main/js/client.js");
 var stompClient = __webpack_require__(/*! ./websocket-listener */ "./src/main/js/websocket-listener.js");
 
 var that;
-var fp;
+var fp; //function animateValue(id, start, end, duration) {
+//    // assumes integer values for start and end
+//
+//    var obj = document.getElementById(id);
+//    var range = end - start;
+//    // no timer shorter than 50ms (not really visible any way)
+//    var minTimer = 50;
+//    // calc step time to show all interediate values
+//    var stepTime = Math.abs(Math.floor(duration / range));
+//
+//    // never go below minTimer
+//    stepTime = Math.max(stepTime, minTimer);
+//
+//    // get current time and calculate desired end time
+//    var startTime = new Date().getTime();
+//    var endTime = startTime + duration;
+//    var timer;
+//
+//    function run() {
+//        var now = new Date().getTime();
+//        var remaining = Math.max((endTime - now) / duration, 0);
+//        var value = Math.round(end - (remaining * range));
+//        obj.innerHTML = value;
+//        if (value == end) {
+//            clearInterval(timer);
+//        }
+//    }
+//
+//    timer = setInterval(run, stepTime);
+//    run();
+//}
 
 var App =
 /*#__PURE__*/
 function (_React$Component) {
   _inherits(App, _React$Component);
+
+  function App(props) {
+    var _this;
+
+    _classCallCheck(this, App);
+
+    _this = _possibleConstructorReturn(this, _getPrototypeOf(App).call(this, props));
+    _this.handleSubmit = _this.handleSubmit.bind(_assertThisInitialized(_this));
+    _this.state = {
+      message: '...',
+      fingerprint: '...',
+      receiveAddress: '...',
+      balance: '...'
+    };
+    return _this;
+  }
 
   _createClass(App, [{
     key: "walletUpdate",
@@ -38702,25 +38748,36 @@ function (_React$Component) {
         console.log(error.message); //=> String
       });
     }
-  }]);
+  }, {
+    key: "handleSubmit",
+    value: function handleSubmit(event) {
+      event.preventDefault(); //const data = new FormData(event.target);
+      //        var data = new FormData();
+      //        data.append('amount', event.target[0].value)
+      //        data.append('address', event.target[1].value)
 
-  function App(props) {
-    var _this;
+      var data = JSON.stringify({
+        "amount": event.target[0].value,
+        "address": event.target[1].value
+      });
+      console.log("ABOUT TO SEND: " + data); //fetch('/api/form-submit-url', {
 
-    _classCallCheck(this, App);
+      fetch('http://localhost:8080/sendCoins', {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'Fingerprint': fp
+        },
+        body: data
+      }).then(function (response) {
+        console.log(response.status); //=> number 100–599
+      }, function (error) {
+        console.log(error.message); //=> String
+      });
+    } //componentDidMount is the API invoked after React renders a component in the DOM.
 
-    _this = _possibleConstructorReturn(this, _getPrototypeOf(App).call(this, props));
-    _this.state = {
-      message: '...',
-      fingerprint: '...',
-      receiveAddress: '...',
-      balance: '...'
-    };
-    return _this;
-  } //componentDidMount is the API invoked after React renders a component in the DOM.
-
-
-  _createClass(App, [{
+  }, {
     key: "componentDidMount",
     value: function componentDidMount() {
       that = this;
@@ -38760,48 +38817,25 @@ function (_React$Component) {
           });
         }, 500);
       }
-    } //    balanceClick(fingerprint) {
-    //        fetch('http://localhost:8080/getBalance', {
-    //          method: "GET",
-    //          headers: {
-    //            'Accept': 'application/json',
-    //            'Content-Type': 'application/json',
-    //            'Fingerprint': fingerprint
-    //          }
-    //
-    //          })
-    //          .then(response => response.json())
-    //          .then(function(response) {
-    //              console.log(response);
-    //              that.setState({balance: response.balance});
-    //          }, function(error) {
-    //              console.log(error.message);
-    //        });
-    //    }
-    //
-    //    receiveClick(fingerprint) {
-    //        fetch('http://localhost:8080/getReceiveAddress', {
-    //          method: "GET",
-    //          headers: {
-    //            'Accept': 'application/json',
-    //            'Content-Type': 'application/json',
-    //            'Fingerprint': fingerprint
-    //          }
-    //
-    //          })
-    //          .then(response => response.json())
-    //          .then(function(response) {
-    //              console.log(response);
-    //              that.setState({receiveAddress: response.receiveAddress});
-    //          }, function(error) {
-    //              console.log(error.message);
-    //        });
-    //    }
-
+    }
   }, {
     key: "render",
     value: function render() {
-      return React.createElement("div", null, React.createElement("p", null, " Message: ", this.state.message, " "), React.createElement("p", null, " Fingerprint: ", this.state.fingerprint, " "), React.createElement("p", null, " Receive Address : ", this.state.receiveAddress, " "), React.createElement("p", null, " Receive Address : ", this.state.balance, " "), React.createElement("br", null));
+      return React.createElement("div", null, React.createElement("p", null, " Message: ", this.state.message, " "), React.createElement("p", null, " Fingerprint: ", this.state.fingerprint, " "), React.createElement("p", null, " Receive Address : ", this.state.receiveAddress, " "), React.createElement("p", null, " Balance : ", this.state.balance, " "), React.createElement("br", null), React.createElement("form", {
+        onSubmit: this.handleSubmit
+      }, React.createElement("label", {
+        htmlFor: "amount"
+      }, "Enter amount"), React.createElement("input", {
+        id: "amount",
+        name: "amount",
+        type: "text"
+      }), React.createElement("label", {
+        htmlFor: "address"
+      }, "Enter address"), React.createElement("input", {
+        id: "address",
+        name: "address",
+        type: "text"
+      }), React.createElement("button", null, "Send data!")));
     }
   }]);
 

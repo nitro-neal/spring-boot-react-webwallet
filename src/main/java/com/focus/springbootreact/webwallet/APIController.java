@@ -6,6 +6,7 @@ import org.bitcoinj.core.listeners.TransactionConfidenceEventListener;
 import org.bitcoinj.kits.WalletAppKit;
 import org.bitcoinj.params.TestNet3Params;
 import org.bitcoinj.script.Script;
+import org.bitcoinj.wallet.SendRequest;
 import org.bitcoinj.wallet.Wallet;
 import org.bitcoinj.wallet.listeners.KeyChainEventListener;
 import org.bitcoinj.wallet.listeners.ScriptsChangeEventListener;
@@ -21,6 +22,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Executor;
 
 @RestController
 public class APIController {
@@ -30,6 +32,8 @@ public class APIController {
 
     Map<String, WalletAppKit> wallets = new HashMap<>();
     Map<String, WalletState> walletStates = new HashMap<>();
+
+    NetworkParameters params = TestNet3Params.get();
 
     @RequestMapping(value = "/initwallet", method = RequestMethod.GET)
     public ResponseEntity<String> initwallet(@RequestHeader(value = "Fingerprint", required = true) String fingerprint) {
@@ -51,9 +55,58 @@ public class APIController {
         return ResponseEntity.ok().build();
     }
 
-    private void createWalletKit(String fingerprint) {
-        NetworkParameters params = TestNet3Params.get();
+    @RequestMapping(value = "/sendCoins", method = RequestMethod.POST)
+    public ResponseEntity<String> sendCoins(@RequestHeader(value = "Fingerprint", required = true) String fingerprint,
+                                            @RequestBody WalletSendRequest sendRequest) {
+        System.out.println("sendCoins called for fingerprint: " + fingerprint + " with amount: " + sendRequest.amount + " and address: " + sendRequest.address);
 
+        if(wallets.get(fingerprint) == null || sendRequest.amount == null || sendRequest.address == null) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        sendCoinsToAddress(fingerprint, sendRequest.amount, sendRequest.address);
+
+        return ResponseEntity.ok().build();
+    }
+
+    private void sendCoinsToAddress(String fingerprint, String amount, String address) {
+
+        WalletAppKit kit = wallets.get(fingerprint);
+        final Coin amountToSend = Coin.parseCoin(amount);
+        final Address addressToSend = Address.fromBase58(params, address);
+
+        SendRequest req = SendRequest.to(addressToSend, amountToSend);
+        req.feePerKb = Coin.parseCoin("0.00001");
+
+        Wallet.SendResult sendResult = null;
+
+        try {
+            sendResult = kit.wallet().sendCoins(wallets.get(fingerprint).peerGroup(), req);
+        } catch (InsufficientMoneyException e) {
+            e.printStackTrace();
+        }
+
+        Transaction createdTx = sendResult.tx;
+        System.out.println("createdTx: " + createdTx);
+
+        final Wallet.SendResult finalSendResult = sendResult;
+        sendResult.broadcastComplete.addListener(new Runnable() {
+            @Override
+            public void run() {
+                // The wallet has changed now, it'll get auto saved shortly or when the app shuts down.
+                walletStates.get(fingerprint).setBalance(wallets.get(fingerprint).wallet().getBalance().toFriendlyString());
+                sendWebWalletUpdate(fingerprint);
+                System.out.println("Sent coins onwards! Transaction hash is " + finalSendResult.tx.getHashAsString());
+            }
+        }, new Executor() {
+            @Override
+            public void execute(Runnable command) {
+
+            }
+        });
+    }
+
+    private void createWalletKit(String fingerprint) {
         WalletAppKit kit = new WalletAppKit(params, new File("."), "walletappkit-" + fingerprint) {
             @Override
             protected void onSetupCompleted() {
@@ -63,7 +116,7 @@ public class APIController {
                 WalletState walletState = WalletState.builder()
                         .message("New Wallet")
                         .balance(wallet().getBalance().toFriendlyString())
-                        .receiveAddress(wallet().freshReceiveAddress().toString())
+                        .receiveAddress(wallet().freshReceiveAddress().toBase58())
                         .build();
                 walletStates.put(fingerprint, walletState);
                 sendWebWalletUpdate(fingerprint);
@@ -100,16 +153,16 @@ public class APIController {
         kit.wallet().addCoinsReceivedEventListener(new WalletCoinsReceivedEventListener() {
             @Override
             public void onCoinsReceived(Wallet wallet, Transaction tx, Coin prevBalance, Coin newBalance) {
-                System.out.println("-----> coins resceived: " + tx);
-                System.out.println("received: " + tx.getValue(wallet));
-                System.out.println("prev balance: " + prevBalance.toFriendlyString());
-                System.out.println("new balance: " + newBalance.toFriendlyString());
+                System.out.println("fingerprint: " + fingerprint + " -----> coins RECEIVED: tx" + tx);
+                // TODO: Bug where if on the same block, newBalance is incorrect..
+//                System.out.println("received: " + tx.getValue(wallet));
+//                System.out.println("prev balance: " + prevBalance.toFriendlyString());
+//                System.out.println("new balance: " + newBalance.toFriendlyString());
+//                Coin amountSentToMe = tx.getValueSentToMe(kit.wallet());
+//                Coin myNewBalance = amountSentToMe.plus(Coin.parseCoin(walletStates.get(fingerprint).getBalance()));
 
                 walletStates.get(fingerprint).setBalance(newBalance.toFriendlyString());
-                System.out.println("ABOUT TO SEND DATA: " + walletStates.get(fingerprint));
-                System.out.println("About To Send Balance:" + walletStates.get(fingerprint).getBalance());
                 sendWebWalletUpdate(fingerprint);
-
             }
         });
 
@@ -117,6 +170,8 @@ public class APIController {
             @Override
             public void onCoinsSent(Wallet wallet, Transaction tx, Coin prevBalance, Coin newBalance) {
                 System.out.println("coins sent");
+                walletStates.get(fingerprint).setBalance(newBalance.toFriendlyString());
+                sendWebWalletUpdate(fingerprint);
             }
         });
 
@@ -137,9 +192,9 @@ public class APIController {
         kit.wallet().addTransactionConfidenceEventListener(new TransactionConfidenceEventListener() {
             @Override
             public void onTransactionConfidenceChanged(Wallet wallet, Transaction tx) {
-                System.out.println("-----> confidence changed: " + tx);
-                TransactionConfidence confidence = tx.getConfidence();
-                System.out.println("new block depth: " + confidence.getDepthInBlocks());
+//                System.out.println("-----> confidence changed: " + tx);
+//                TransactionConfidence confidence = tx.getConfidence();
+//                System.out.println("new block depth: " + confidence.getDepthInBlocks());
             }
         });
 

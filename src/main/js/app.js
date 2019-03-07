@@ -9,13 +9,19 @@ var fp;
 
 class App extends React.Component {
 
-    walletUpdate(payload) {
-        console.log("Walletupdate called with MYPAYLOAD:" + payload)
-        var payloadJson = JSON.parse(payload.body)
+	constructor(props) {
+		super(props);
+		this.handleSubmit = this.handleSubmit.bind(this);
+		this.state = {message: '...', fingerprint: '...', receiveAddress: '...', balance: '...'};
+	}
 
-        that.setState({receiveAddress: payloadJson.receiveAddress});
-        that.setState({balance: payloadJson.balance});
-    }
+	walletUpdate(payload) {
+            console.log("Walletupdate called with MYPAYLOAD:" + payload)
+            var payloadJson = JSON.parse(payload.body)
+
+            that.setState({receiveAddress: payloadJson.receiveAddress});
+            that.setState({balance: payloadJson.balance});
+        }
 
     stompClientReady() {
         that.setState({fingerprint: fp});
@@ -35,13 +41,31 @@ class App extends React.Component {
               console.log(response.status);     //=> number 100–599
           }, function(error) {
               console.log(error.message); //=> String
-        });
+          });
     }
 
-	constructor(props) {
-		super(props);
-		this.state = {message: '...', fingerprint: '...', receiveAddress: '...', balance: '...'};
-	}
+    handleSubmit(event) {
+        event.preventDefault();
+        //const data = new FormData(event.target);
+
+        var data = JSON.stringify({"amount": event.target[0].value, "address": event.target[1].value});
+        console.log("ABOUT TO SEND: " + data)
+
+        //fetch('/api/form-submit-url', {
+        fetch('http://localhost:8080/sendCoins', {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'Fingerprint': fp
+          },
+          body: data,
+        }).then(function(response) {
+            console.log(response.status);     //=> number 100–599
+        }, function(error) {
+            console.log(error.message); //=> String
+        });
+    }
 
     //componentDidMount is the API invoked after React renders a component in the DOM.
 	componentDidMount() {
@@ -87,11 +111,18 @@ class App extends React.Component {
             <p> Message: {this.state.message} </p>
             <p> Fingerprint: {this.state.fingerprint} </p>
             <p> Receive Address : {this.state.receiveAddress} </p>
-            <p> Receive Address : {this.state.balance} </p>
+            <p> Balance : {this.state.balance} </p>
             <br/>
 
+            <form onSubmit={this.handleSubmit}>
+                <label htmlFor="amount">Enter amount</label>
+                <input id="amount" name="amount" type="text" />
 
+                <label htmlFor="address">Enter address</label>
+                <input id="address" name="address" type="text" />
 
+                <button>Send data!</button>
+            </form>
           </div>
 		)
 	}
