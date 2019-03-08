@@ -12,7 +12,7 @@ class App extends React.Component {
 	constructor(props) {
 		super(props);
 		this.handleSubmit = this.handleSubmit.bind(this);
-		this.state = {message: '...', fingerprint: '...', receiveAddress: '...', balance: '...', transactions: [{"transactionType": "..", "address": "..", "timestamp": "..", "confirmations" : "..", "amount" : "..", "transactionId" : "..", "debug" : "..."}], hastransactions : false};
+		this.state = {message: '...', fingerprint: '...', receiveAddress: '...', balance: '...', transactions: [{"transactionType": "..", "address": "..", "timestamp": "..", "amount" : "..", "transactionId" : "..", "debug" : "..."}], hastransactions : false};
 	}
 
 	walletUpdate(payload) {
@@ -42,10 +42,25 @@ class App extends React.Component {
           }
 
           }).then(function(response) {
-              console.log(response.status);     //=> number 100–599
+              console.log(response.status);
           }, function(error) {
-              console.log(error.message); //=> String
+              console.log(error.message);
           });
+    }
+
+    handleReboot(event) {
+        fetch('http://localhost:8080/reboot', {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'Fingerprint': fp
+          }
+        }).then(function(response) {
+            console.log(response.status);
+        }, function(error) {
+            console.log(error.message);
+        });
     }
 
     handleSubmit(event) {
@@ -65,9 +80,9 @@ class App extends React.Component {
           },
           body: data,
         }).then(function(response) {
-            console.log(response.status);     //=> number 100–599
+            console.log(response.status);
         }, function(error) {
-            console.log(error.message); //=> String
+            console.log(error.message);
         });
     }
 
@@ -128,13 +143,15 @@ class App extends React.Component {
                 <button>Send data!</button>
             </form>
 
-            <br/>
-            <br/>
+            <form onSubmit={this.handleReboot}>
+                <button>reboot :(</button>
+            </form>
 
-            if (this.state.hastransactions) {
-                this.state.transactions.map((t) => <p>{t.transactionType} | { t.address } | { t.amount } | { t.timestamp } | { t.confirmations } | { t.transactionId } | { t.debug }</p>)
-                //this.state.transactions[0].amount
-            }
+            <br/>
+            <br/>
+            <p> transactionType | address | amount | timestamp | transactionId </p>
+
+            {this.state.transactions.map((t) => <p>{t.transactionType} { t.amount } -> { t.address } w transactionid: { t.transactionId } @ { t.timestamp } |  <br/><br/><br/> {t.debug}</p>)}
 
 
             <br/>

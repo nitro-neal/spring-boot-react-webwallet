@@ -12,7 +12,6 @@ import java.time.LocalDateTime;
 public class WalletTransaction {
     private  String transactionType;
     private LocalDateTime timestamp;
-    private int confirmations;
     private String amount;
     private String address;
     private String transactionId;

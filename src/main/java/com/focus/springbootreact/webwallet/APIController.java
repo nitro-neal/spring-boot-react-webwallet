@@ -31,6 +31,7 @@ public class APIController {
     @Autowired
     SimpMessagingTemplate websocket;
 
+    Map<String, Boolean> fingerprints = new HashMap<>();
     Map<String, WalletAppKit> wallets = new HashMap<>();
     Map<String, WalletState> walletStates = new HashMap<>();
 
@@ -40,18 +41,23 @@ public class APIController {
     public ResponseEntity<String> initwallet(@RequestHeader(value = "Fingerprint", required = true) String fingerprint) {
         System.out.println("initwallet called for fingerprint: " + fingerprint);
 
-        if(wallets.get(fingerprint) != null) {
+        if(fingerprints.get(fingerprint) != null) {
             sendWebWalletUpdate(fingerprint);
             return ResponseEntity.ok().build();
         }
 
-        Runnable r = new Runnable() {
-            public void run() {
-                createWalletKit(fingerprint);
-            }
-        };
+        fingerprints.put(fingerprint, true);
 
-        new Thread(r).start();
+        // Lets try sync..
+        createWalletKit(fingerprint);
+
+//        Runnable r = new Runnable() {
+//            public void run() {
+//                createWalletKit(fingerprint);
+//            }
+//        };
+//
+//        new Thread(r).start();
 
         return ResponseEntity.ok().build();
     }
@@ -66,6 +72,21 @@ public class APIController {
         }
 
         sendCoinsToAddress(fingerprint, sendRequest.amount, sendRequest.address);
+
+        return ResponseEntity.ok().build();
+    }
+
+    @RequestMapping(value = "/reboot", method = RequestMethod.POST)
+    public ResponseEntity<String> reboot(@RequestHeader(value = "Fingerprint", required = true) String fingerprint) {
+
+        fingerprints.remove(fingerprint);
+        walletStates.remove(fingerprint);
+        wallets.remove(fingerprint);
+
+        fingerprints.put(fingerprint, true);
+
+        // running sync
+        createWalletKit(fingerprint);
 
         return ResponseEntity.ok().build();
     }
@@ -108,7 +129,7 @@ public class APIController {
     }
 
     private void createWalletKit(String fingerprint) {
-        WalletAppKit kit = new WalletAppKit(params, new File("."), "walletappkit-" + fingerprint) {
+        WalletAppKit kit = new WalletAppKit(params, new File("./" + fingerprint), "walletappkit-" + fingerprint) {
             @Override
             protected void onSetupCompleted() {
 //                 This is called in a background thread after startAndWait is called
@@ -122,11 +143,14 @@ public class APIController {
 //                        .build();
 //                walletStates.put(fingerprint, walletState);
 //                sendWebWalletUpdate(fingerprint);
+
+                //TODO: test this..
+                wallet().allowSpendingUnconfirmedTransactions();
                 System.out.println("Wallet Setup Complete. Waiting for blockchain download..");
             }
         };
 
-        wallets.put(fingerprint, kit);
+        //wallets.put(fingerprint, kit);
 
         //TODO: This doesn't work
         DownloadProgressTracker bListener = new DownloadProgressTracker() {
@@ -155,11 +179,15 @@ public class APIController {
             .receiveAddress(kit.wallet().freshReceiveAddress().toBase58())
             .transactions(new ArrayList<>())
             .build();
-        walletStates.put(fingerprint, walletState);
-
-        sendWebWalletUpdate(fingerprint);
 
         addListeners(kit, fingerprint);
+
+        wallets.put(fingerprint, kit);
+        walletStates.put(fingerprint, walletState);
+
+        System.out.println(" --------------------- WALLET STATES READY! ---------------- FOR : " + fingerprint);
+
+        sendWebWalletUpdate(fingerprint);
     }
 
     private void addListeners(WalletAppKit kit, String fingerprint) {
@@ -180,17 +208,36 @@ public class APIController {
 //                Coin amountSentToMe = tx.getValueSentToMe(kit.wallet());
 //                Coin myNewBalance = amountSentToMe.plus(Coin.parseCoin(walletStates.get(fingerprint).getBalance()));
 
+                Coin value = tx.getValueSentToMe(wallet);
+
+                Address addressReceivedFrom = null;
+                for(TransactionInput input : tx.getInputs()) {
+                    try {
+                        addressReceivedFrom = input.getScriptSig().getToAddress(params);
+                    } catch (ScriptException e) {
+                        System.out.println("caught script excetpion... moving to next..");
+                    }
+                    if(addressReceivedFrom != null) {
+                        break;
+                    }
+                }
+
+                String addressInTransaction = "";
+
+                if(addressReceivedFrom != null) {
+                    addressInTransaction += addressReceivedFrom;
+                }
+
                 WalletTransaction transaction = WalletTransaction.builder()
                         .transactionType("receive")
                         .transactionId(tx.getHashAsString())
                         .timestamp(LocalDateTime.now())
-                        .address(tx.getInputs().stream().findFirst().get().getOutpoint().getHash().toString())
+                        .address(addressInTransaction)
                         .amount(newBalance.minus(prevBalance).toFriendlyString())
-                        .confirmations(0)
-                        .debug("prevBalance: " + prevBalance.toFriendlyString() + " newBalance: " + newBalance.toFriendlyString() + "tx: " + tx)
+                        .debug("tx.getValueSentTome! :" + value.toFriendlyString() + " prevBalance: " + prevBalance.toFriendlyString() + " newBalance: " + newBalance.toFriendlyString() + "tx: " + tx)
                         .build();
 
-                walletStates.get(fingerprint).getTransactions().add(transaction);
+                walletStates.get(fingerprint).getTransactions().add(0, transaction);
                 walletStates.get(fingerprint).setBalance(newBalance.toFriendlyString());
                 sendWebWalletUpdate(fingerprint);
             }
@@ -201,17 +248,53 @@ public class APIController {
             public void onCoinsSent(Wallet wallet, Transaction tx, Coin prevBalance, Coin newBalance) {
                 System.out.println("coins sent");
 
+                Coin value = tx.getValueSentToMe(wallet);
+
+                //Add
+                String transactionDebug = "";
+                for (TransactionInput input : tx.getInputs()) {
+                    transactionDebug += "\n------" + input;
+                    //transactionDebug += "\n\n--- input getAddressFromP2SH: " + input.getConnectedOutput().getAddressFromP2SH(params).toBase58();
+                    //transactionDebug += "--- input getAddressFromP2PKHScript: " + input.getConnectedOutput().getAddressFromP2PKHScript(params).toBase58();
+                }
+
+                for (TransactionOutput output : tx.getOutputs()) {
+                    //found it
+                    //------TxOut of 0.001 BTC to mxWBkoVjnbLWgkkhgvsPrqhij1LWsqiySB script:DUP HASH160 PUSHDATA(20)[ba54f58d73bb66a1153ec72c61c21303672b58f9] EQUALVERIFY CHECKSIG
+                    transactionDebug += "\n------" + output;
+//                    transactionDebug += "\n\n--- output getAddressFromP2PKH: " + output.getAddressFromP2SH(params).toBase58();
+//                    transactionDebug += "--- output getAddressFromP2PKHScript: " + output.getAddressFromP2PKHScript(params).toBase58();
+//                    transactionDebug += "----- THIS IS THE TO ADDRESSS: " + output.getScriptPubKey().getToAddress(params);
+                }
+
+
+                // not working, can show wrong address
+                Address addressSend = null;
+                for(TransactionOutput output : tx.getOutputs()) {
+                    addressSend = output.getAddressFromP2PKHScript(params);
+
+                    if(addressSend != null) {
+                        break;
+                    }
+                }
+
+                String addressInTransaction = "";
+
+                if(addressSend != null) {
+                    addressInTransaction += addressSend;
+                }
+
+
                 WalletTransaction transaction = WalletTransaction.builder()
                         .transactionType("send")
                         .transactionId(tx.getHashAsString())
                         .timestamp(LocalDateTime.now())
-                        .address("TODO")
+                        .address(addressInTransaction)
                         .amount(prevBalance.minus(newBalance).toFriendlyString())
-                        .confirmations(0)
-                        .debug("prevBalance: " + prevBalance.toFriendlyString() + " newBalance: " + newBalance.toFriendlyString() + "tx: " + tx)
+                        .debug(transactionDebug + " !!!!!!! tx.getValueSentTome! :" + value.toFriendlyString() + "prevBalance: " + prevBalance.toFriendlyString() + " newBalance: " + newBalance.toFriendlyString() + "tx: " + tx)
                         .build();
 
-                walletStates.get(fingerprint).getTransactions().add(transaction);
+                walletStates.get(fingerprint).getTransactions().add(0, transaction);
                 walletStates.get(fingerprint).setBalance(newBalance.toFriendlyString());
                 sendWebWalletUpdate(fingerprint);
             }
@@ -244,8 +327,13 @@ public class APIController {
     }
 
     private void sendWebWalletUpdate(String fingerprint) {
-        System.out.println("SENDING WEBSOCKET MESSAGE");
+        System.out.println("SENDING WEBSOCKET MESSAGE TO FINGERPRINT: " +fingerprint);
+        if(walletStates.get(fingerprint) == null) {
+            System.out.println("!!Was going to send websocket but wallet state was null, this can be a race condition on cold boot");
+            return;
+        }
         websocket.convertAndSend(WebSocketConfiguration.MESSAGE_PREFIX + "/updateWallet-" + fingerprint, walletStates.get(fingerprint));
+
     }
 
     private void startKitDemo() {

@@ -38682,7 +38682,6 @@ function (_React$Component) {
         "transactionType": "..",
         "address": "..",
         "timestamp": "..",
-        "confirmations": "..",
         "amount": "..",
         "transactionId": "..",
         "debug": "..."
@@ -38732,9 +38731,25 @@ function (_React$Component) {
           'Fingerprint': fingerprint
         }
       }).then(function (response) {
-        console.log(response.status); //=> number 100–599
+        console.log(response.status);
       }, function (error) {
-        console.log(error.message); //=> String
+        console.log(error.message);
+      });
+    }
+  }, {
+    key: "handleReboot",
+    value: function handleReboot(event) {
+      fetch('http://localhost:8080/reboot', {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'Fingerprint': fp
+        }
+      }).then(function (response) {
+        console.log(response.status);
+      }, function (error) {
+        console.log(error.message);
       });
     }
   }, {
@@ -38757,9 +38772,9 @@ function (_React$Component) {
         },
         body: data
       }).then(function (response) {
-        console.log(response.status); //=> number 100–599
+        console.log(response.status);
       }, function (error) {
-        console.log(error.message); //=> String
+        console.log(error.message);
       });
     } //componentDidMount is the API invoked after React renders a component in the DOM.
 
@@ -38821,10 +38836,11 @@ function (_React$Component) {
         id: "address",
         name: "address",
         type: "text"
-      }), React.createElement("button", null, "Send data!")), React.createElement("br", null), React.createElement("br", null), "if (this.state.hastransactions) ", this.state.transactions.map(function (t) {
-        return React.createElement("p", null, t.transactionType, " | ", t.address, " | ", t.amount, " | ", t.timestamp, " | ", t.confirmations, " | ", t.transactionId, " | ", t.debug);
-      }) //this.state.transactions[0].amount
-      , React.createElement("br", null));
+      }), React.createElement("button", null, "Send data!")), React.createElement("form", {
+        onSubmit: this.handleReboot
+      }, React.createElement("button", null, "reboot :(")), React.createElement("br", null), React.createElement("br", null), React.createElement("p", null, " transactionType | address | amount | timestamp | transactionId "), this.state.transactions.map(function (t) {
+        return React.createElement("p", null, t.transactionType, " ", t.amount, " -> ", t.address, " w transactionid: ", t.transactionId, " @ ", t.timestamp, " |  ", React.createElement("br", null), React.createElement("br", null), React.createElement("br", null), " ", t.debug);
+      }), React.createElement("br", null));
     }
   }]);
 
