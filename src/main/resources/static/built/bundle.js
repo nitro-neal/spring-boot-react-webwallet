@@ -38679,7 +38679,13 @@ function (_React$Component) {
       receiveAddress: '...',
       balance: '...',
       transactions: [{
-        "amount": "1"
+        "transactionType": "..",
+        "address": "..",
+        "timestamp": "..",
+        "confirmations": "..",
+        "amount": "..",
+        "transactionId": "..",
+        "debug": "..."
       }],
       hastransactions: false
     };
@@ -38816,7 +38822,7 @@ function (_React$Component) {
         name: "address",
         type: "text"
       }), React.createElement("button", null, "Send data!")), React.createElement("br", null), React.createElement("br", null), "if (this.state.hastransactions) ", this.state.transactions.map(function (t) {
-        return React.createElement("p", null, t.amount);
+        return React.createElement("p", null, t.transactionType, " | ", t.address, " | ", t.amount, " | ", t.timestamp, " | ", t.confirmations, " | ", t.transactionId, " | ", t.debug);
       }) //this.state.transactions[0].amount
       , React.createElement("br", null));
     }

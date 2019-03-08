@@ -16,4 +16,5 @@ public class WalletTransaction {
     private String amount;
     private String address;
     private String transactionId;
+    private String debug;
 }

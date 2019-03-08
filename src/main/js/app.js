@@ -12,7 +12,7 @@ class App extends React.Component {
 	constructor(props) {
 		super(props);
 		this.handleSubmit = this.handleSubmit.bind(this);
-		this.state = {message: '...', fingerprint: '...', receiveAddress: '...', balance: '...', transactions: [{"amount" : "1"}], hastransactions : false};
+		this.state = {message: '...', fingerprint: '...', receiveAddress: '...', balance: '...', transactions: [{"transactionType": "..", "address": "..", "timestamp": "..", "confirmations" : "..", "amount" : "..", "transactionId" : "..", "debug" : "..."}], hastransactions : false};
 	}
 
 	walletUpdate(payload) {
@@ -132,7 +132,7 @@ class App extends React.Component {
             <br/>
 
             if (this.state.hastransactions) {
-                this.state.transactions.map((t) => <p>{ t.amount }</p>)
+                this.state.transactions.map((t) => <p>{t.transactionType} | { t.address } | { t.amount } | { t.timestamp } | { t.confirmations } | { t.transactionId } | { t.debug }</p>)
                 //this.state.transactions[0].amount
             }
 

@@ -22,6 +22,9 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.Executor;
 
+
+// multiple wallets ! - https://bitcoin.stackexchange.com/questions/41019/bitcoinj-multiple-wallets#49714
+
 @RestController
 public class APIController {
 
@@ -111,14 +114,14 @@ public class APIController {
 //                 This is called in a background thread after startAndWait is called
 //                if (wallet().getKeyChainGroupSize() < 1)
 //                    wallet().importKey(new ECKey());
-                WalletState walletState = WalletState.builder()
-                        .message("New Wallet")
-                        .balance(wallet().getBalance().toFriendlyString())
-                        .receiveAddress(wallet().freshReceiveAddress().toBase58())
-                        .transactions(new ArrayList<>())
-                        .build();
-                walletStates.put(fingerprint, walletState);
-                sendWebWalletUpdate(fingerprint);
+//                WalletState walletState = WalletState.builder()
+//                        .message("New Wallet")
+//                        .balance(wallet().getBalance().toFriendlyString())
+//                        .receiveAddress(wallet().freshReceiveAddress().toBase58())
+//                        .transactions(new ArrayList<>())
+//                        .build();
+//                walletStates.put(fingerprint, walletState);
+//                sendWebWalletUpdate(fingerprint);
                 System.out.println("Wallet Setup Complete. Waiting for blockchain download..");
             }
         };
@@ -145,6 +148,17 @@ public class APIController {
         kit.startAsync();
         kit.awaitRunning();
 
+
+        WalletState walletState = WalletState.builder()
+            .message("New Wallet")
+            .balance(kit.wallet().getBalance().toFriendlyString())
+            .receiveAddress(kit.wallet().freshReceiveAddress().toBase58())
+            .transactions(new ArrayList<>())
+            .build();
+        walletStates.put(fingerprint, walletState);
+
+        sendWebWalletUpdate(fingerprint);
+
         addListeners(kit, fingerprint);
     }
 
@@ -152,6 +166,12 @@ public class APIController {
         kit.wallet().addCoinsReceivedEventListener(new WalletCoinsReceivedEventListener() {
             @Override
             public void onCoinsReceived(Wallet wallet, Transaction tx, Coin prevBalance, Coin newBalance) {
+
+                if(newBalance.isLessThan(prevBalance)) {
+                    System.out.println("fingerprint: " + fingerprint + " received but new balanace is less than prev.. so actually sent..");
+                    return;
+                }
+
                 System.out.println("fingerprint: " + fingerprint + " -----> coins RECEIVED: tx" + tx);
                 // TODO: Bug where if on the same block, newBalance is incorrect..
 //                System.out.println("received: " + tx.getValue(wallet));
@@ -167,6 +187,7 @@ public class APIController {
                         .address(tx.getInputs().stream().findFirst().get().getOutpoint().getHash().toString())
                         .amount(newBalance.minus(prevBalance).toFriendlyString())
                         .confirmations(0)
+                        .debug("prevBalance: " + prevBalance.toFriendlyString() + " newBalance: " + newBalance.toFriendlyString() + "tx: " + tx)
                         .build();
 
                 walletStates.get(fingerprint).getTransactions().add(transaction);
@@ -184,9 +205,10 @@ public class APIController {
                         .transactionType("send")
                         .transactionId(tx.getHashAsString())
                         .timestamp(LocalDateTime.now())
-                        .address(tx.getOutput(0l).getHash().toString())
+                        .address("TODO")
                         .amount(prevBalance.minus(newBalance).toFriendlyString())
                         .confirmations(0)
+                        .debug("prevBalance: " + prevBalance.toFriendlyString() + " newBalance: " + newBalance.toFriendlyString() + "tx: " + tx)
                         .build();
 
                 walletStates.get(fingerprint).getTransactions().add(transaction);
