@@ -3080,6 +3080,2280 @@ module.exports = ReactPropTypesSecret;
 
 /***/ }),
 
+/***/ "./node_modules/qrcode-generator/qrcode.js":
+/*!*************************************************!*\
+  !*** ./node_modules/qrcode-generator/qrcode.js ***!
+  \*************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+var __WEBPACK_AMD_DEFINE_FACTORY__, __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;//---------------------------------------------------------------------
+//
+// QR Code Generator for JavaScript
+//
+// Copyright (c) 2009 Kazuhiko Arase
+//
+// URL: http://www.d-project.com/
+//
+// Licensed under the MIT license:
+//  http://www.opensource.org/licenses/mit-license.php
+//
+// The word 'QR Code' is registered trademark of
+// DENSO WAVE INCORPORATED
+//  http://www.denso-wave.com/qrcode/faqpatent-e.html
+//
+//---------------------------------------------------------------------
+
+var qrcode = function() {
+
+  //---------------------------------------------------------------------
+  // qrcode
+  //---------------------------------------------------------------------
+
+  /**
+   * qrcode
+   * @param typeNumber 1 to 40
+   * @param errorCorrectionLevel 'L','M','Q','H'
+   */
+  var qrcode = function(typeNumber, errorCorrectionLevel) {
+
+    var PAD0 = 0xEC;
+    var PAD1 = 0x11;
+
+    var _typeNumber = typeNumber;
+    var _errorCorrectionLevel = QRErrorCorrectionLevel[errorCorrectionLevel];
+    var _modules = null;
+    var _moduleCount = 0;
+    var _dataCache = null;
+    var _dataList = [];
+
+    var _this = {};
+
+    var makeImpl = function(test, maskPattern) {
+
+      _moduleCount = _typeNumber * 4 + 17;
+      _modules = function(moduleCount) {
+        var modules = new Array(moduleCount);
+        for (var row = 0; row < moduleCount; row += 1) {
+          modules[row] = new Array(moduleCount);
+          for (var col = 0; col < moduleCount; col += 1) {
+            modules[row][col] = null;
+          }
+        }
+        return modules;
+      }(_moduleCount);
+
+      setupPositionProbePattern(0, 0);
+      setupPositionProbePattern(_moduleCount - 7, 0);
+      setupPositionProbePattern(0, _moduleCount - 7);
+      setupPositionAdjustPattern();
+      setupTimingPattern();
+      setupTypeInfo(test, maskPattern);
+
+      if (_typeNumber >= 7) {
+        setupTypeNumber(test);
+      }
+
+      if (_dataCache == null) {
+        _dataCache = createData(_typeNumber, _errorCorrectionLevel, _dataList);
+      }
+
+      mapData(_dataCache, maskPattern);
+    };
+
+    var setupPositionProbePattern = function(row, col) {
+
+      for (var r = -1; r <= 7; r += 1) {
+
+        if (row + r <= -1 || _moduleCount <= row + r) continue;
+
+        for (var c = -1; c <= 7; c += 1) {
+
+          if (col + c <= -1 || _moduleCount <= col + c) continue;
+
+          if ( (0 <= r && r <= 6 && (c == 0 || c == 6) )
+              || (0 <= c && c <= 6 && (r == 0 || r == 6) )
+              || (2 <= r && r <= 4 && 2 <= c && c <= 4) ) {
+            _modules[row + r][col + c] = true;
+          } else {
+            _modules[row + r][col + c] = false;
+          }
+        }
+      }
+    };
+
+    var getBestMaskPattern = function() {
+
+      var minLostPoint = 0;
+      var pattern = 0;
+
+      for (var i = 0; i < 8; i += 1) {
+
+        makeImpl(true, i);
+
+        var lostPoint = QRUtil.getLostPoint(_this);
+
+        if (i == 0 || minLostPoint > lostPoint) {
+          minLostPoint = lostPoint;
+          pattern = i;
+        }
+      }
+
+      return pattern;
+    };
+
+    var setupTimingPattern = function() {
+
+      for (var r = 8; r < _moduleCount - 8; r += 1) {
+        if (_modules[r][6] != null) {
+          continue;
+        }
+        _modules[r][6] = (r % 2 == 0);
+      }
+
+      for (var c = 8; c < _moduleCount - 8; c += 1) {
+        if (_modules[6][c] != null) {
+          continue;
+        }
+        _modules[6][c] = (c % 2 == 0);
+      }
+    };
+
+    var setupPositionAdjustPattern = function() {
+
+      var pos = QRUtil.getPatternPosition(_typeNumber);
+
+      for (var i = 0; i < pos.length; i += 1) {
+
+        for (var j = 0; j < pos.length; j += 1) {
+
+          var row = pos[i];
+          var col = pos[j];
+
+          if (_modules[row][col] != null) {
+            continue;
+          }
+
+          for (var r = -2; r <= 2; r += 1) {
+
+            for (var c = -2; c <= 2; c += 1) {
+
+              if (r == -2 || r == 2 || c == -2 || c == 2
+                  || (r == 0 && c == 0) ) {
+                _modules[row + r][col + c] = true;
+              } else {
+                _modules[row + r][col + c] = false;
+              }
+            }
+          }
+        }
+      }
+    };
+
+    var setupTypeNumber = function(test) {
+
+      var bits = QRUtil.getBCHTypeNumber(_typeNumber);
+
+      for (var i = 0; i < 18; i += 1) {
+        var mod = (!test && ( (bits >> i) & 1) == 1);
+        _modules[Math.floor(i / 3)][i % 3 + _moduleCount - 8 - 3] = mod;
+      }
+
+      for (var i = 0; i < 18; i += 1) {
+        var mod = (!test && ( (bits >> i) & 1) == 1);
+        _modules[i % 3 + _moduleCount - 8 - 3][Math.floor(i / 3)] = mod;
+      }
+    };
+
+    var setupTypeInfo = function(test, maskPattern) {
+
+      var data = (_errorCorrectionLevel << 3) | maskPattern;
+      var bits = QRUtil.getBCHTypeInfo(data);
+
+      // vertical
+      for (var i = 0; i < 15; i += 1) {
+
+        var mod = (!test && ( (bits >> i) & 1) == 1);
+
+        if (i < 6) {
+          _modules[i][8] = mod;
+        } else if (i < 8) {
+          _modules[i + 1][8] = mod;
+        } else {
+          _modules[_moduleCount - 15 + i][8] = mod;
+        }
+      }
+
+      // horizontal
+      for (var i = 0; i < 15; i += 1) {
+
+        var mod = (!test && ( (bits >> i) & 1) == 1);
+
+        if (i < 8) {
+          _modules[8][_moduleCount - i - 1] = mod;
+        } else if (i < 9) {
+          _modules[8][15 - i - 1 + 1] = mod;
+        } else {
+          _modules[8][15 - i - 1] = mod;
+        }
+      }
+
+      // fixed module
+      _modules[_moduleCount - 8][8] = (!test);
+    };
+
+    var mapData = function(data, maskPattern) {
+
+      var inc = -1;
+      var row = _moduleCount - 1;
+      var bitIndex = 7;
+      var byteIndex = 0;
+      var maskFunc = QRUtil.getMaskFunction(maskPattern);
+
+      for (var col = _moduleCount - 1; col > 0; col -= 2) {
+
+        if (col == 6) col -= 1;
+
+        while (true) {
+
+          for (var c = 0; c < 2; c += 1) {
+
+            if (_modules[row][col - c] == null) {
+
+              var dark = false;
+
+              if (byteIndex < data.length) {
+                dark = ( ( (data[byteIndex] >>> bitIndex) & 1) == 1);
+              }
+
+              var mask = maskFunc(row, col - c);
+
+              if (mask) {
+                dark = !dark;
+              }
+
+              _modules[row][col - c] = dark;
+              bitIndex -= 1;
+
+              if (bitIndex == -1) {
+                byteIndex += 1;
+                bitIndex = 7;
+              }
+            }
+          }
+
+          row += inc;
+
+          if (row < 0 || _moduleCount <= row) {
+            row -= inc;
+            inc = -inc;
+            break;
+          }
+        }
+      }
+    };
+
+    var createBytes = function(buffer, rsBlocks) {
+
+      var offset = 0;
+
+      var maxDcCount = 0;
+      var maxEcCount = 0;
+
+      var dcdata = new Array(rsBlocks.length);
+      var ecdata = new Array(rsBlocks.length);
+
+      for (var r = 0; r < rsBlocks.length; r += 1) {
+
+        var dcCount = rsBlocks[r].dataCount;
+        var ecCount = rsBlocks[r].totalCount - dcCount;
+
+        maxDcCount = Math.max(maxDcCount, dcCount);
+        maxEcCount = Math.max(maxEcCount, ecCount);
+
+        dcdata[r] = new Array(dcCount);
+
+        for (var i = 0; i < dcdata[r].length; i += 1) {
+          dcdata[r][i] = 0xff & buffer.getBuffer()[i + offset];
+        }
+        offset += dcCount;
+
+        var rsPoly = QRUtil.getErrorCorrectPolynomial(ecCount);
+        var rawPoly = qrPolynomial(dcdata[r], rsPoly.getLength() - 1);
+
+        var modPoly = rawPoly.mod(rsPoly);
+        ecdata[r] = new Array(rsPoly.getLength() - 1);
+        for (var i = 0; i < ecdata[r].length; i += 1) {
+          var modIndex = i + modPoly.getLength() - ecdata[r].length;
+          ecdata[r][i] = (modIndex >= 0)? modPoly.getAt(modIndex) : 0;
+        }
+      }
+
+      var totalCodeCount = 0;
+      for (var i = 0; i < rsBlocks.length; i += 1) {
+        totalCodeCount += rsBlocks[i].totalCount;
+      }
+
+      var data = new Array(totalCodeCount);
+      var index = 0;
+
+      for (var i = 0; i < maxDcCount; i += 1) {
+        for (var r = 0; r < rsBlocks.length; r += 1) {
+          if (i < dcdata[r].length) {
+            data[index] = dcdata[r][i];
+            index += 1;
+          }
+        }
+      }
+
+      for (var i = 0; i < maxEcCount; i += 1) {
+        for (var r = 0; r < rsBlocks.length; r += 1) {
+          if (i < ecdata[r].length) {
+            data[index] = ecdata[r][i];
+            index += 1;
+          }
+        }
+      }
+
+      return data;
+    };
+
+    var createData = function(typeNumber, errorCorrectionLevel, dataList) {
+
+      var rsBlocks = QRRSBlock.getRSBlocks(typeNumber, errorCorrectionLevel);
+
+      var buffer = qrBitBuffer();
+
+      for (var i = 0; i < dataList.length; i += 1) {
+        var data = dataList[i];
+        buffer.put(data.getMode(), 4);
+        buffer.put(data.getLength(), QRUtil.getLengthInBits(data.getMode(), typeNumber) );
+        data.write(buffer);
+      }
+
+      // calc num max data.
+      var totalDataCount = 0;
+      for (var i = 0; i < rsBlocks.length; i += 1) {
+        totalDataCount += rsBlocks[i].dataCount;
+      }
+
+      if (buffer.getLengthInBits() > totalDataCount * 8) {
+        throw 'code length overflow. ('
+          + buffer.getLengthInBits()
+          + '>'
+          + totalDataCount * 8
+          + ')';
+      }
+
+      // end code
+      if (buffer.getLengthInBits() + 4 <= totalDataCount * 8) {
+        buffer.put(0, 4);
+      }
+
+      // padding
+      while (buffer.getLengthInBits() % 8 != 0) {
+        buffer.putBit(false);
+      }
+
+      // padding
+      while (true) {
+
+        if (buffer.getLengthInBits() >= totalDataCount * 8) {
+          break;
+        }
+        buffer.put(PAD0, 8);
+
+        if (buffer.getLengthInBits() >= totalDataCount * 8) {
+          break;
+        }
+        buffer.put(PAD1, 8);
+      }
+
+      return createBytes(buffer, rsBlocks);
+    };
+
+    _this.addData = function(data, mode) {
+
+      mode = mode || 'Byte';
+
+      var newData = null;
+
+      switch(mode) {
+      case 'Numeric' :
+        newData = qrNumber(data);
+        break;
+      case 'Alphanumeric' :
+        newData = qrAlphaNum(data);
+        break;
+      case 'Byte' :
+        newData = qr8BitByte(data);
+        break;
+      case 'Kanji' :
+        newData = qrKanji(data);
+        break;
+      default :
+        throw 'mode:' + mode;
+      }
+
+      _dataList.push(newData);
+      _dataCache = null;
+    };
+
+    _this.isDark = function(row, col) {
+      if (row < 0 || _moduleCount <= row || col < 0 || _moduleCount <= col) {
+        throw row + ',' + col;
+      }
+      return _modules[row][col];
+    };
+
+    _this.getModuleCount = function() {
+      return _moduleCount;
+    };
+
+    _this.make = function() {
+      if (_typeNumber < 1) {
+        var typeNumber = 1;
+
+        for (; typeNumber < 40; typeNumber++) {
+          var rsBlocks = QRRSBlock.getRSBlocks(typeNumber, _errorCorrectionLevel);
+          var buffer = qrBitBuffer();
+
+          for (var i = 0; i < _dataList.length; i++) {
+            var data = _dataList[i];
+            buffer.put(data.getMode(), 4);
+            buffer.put(data.getLength(), QRUtil.getLengthInBits(data.getMode(), typeNumber) );
+            data.write(buffer);
+          }
+
+          var totalDataCount = 0;
+          for (var i = 0; i < rsBlocks.length; i++) {
+            totalDataCount += rsBlocks[i].dataCount;
+          }
+
+          if (buffer.getLengthInBits() <= totalDataCount * 8) {
+            break;
+          }
+        }
+
+        _typeNumber = typeNumber;
+      }
+
+      makeImpl(false, getBestMaskPattern() );
+    };
+
+    _this.createTableTag = function(cellSize, margin) {
+
+      cellSize = cellSize || 2;
+      margin = (typeof margin == 'undefined')? cellSize * 4 : margin;
+
+      var qrHtml = '';
+
+      qrHtml += '<table style="';
+      qrHtml += ' border-width: 0px; border-style: none;';
+      qrHtml += ' border-collapse: collapse;';
+      qrHtml += ' padding: 0px; margin: ' + margin + 'px;';
+      qrHtml += '">';
+      qrHtml += '<tbody>';
+
+      for (var r = 0; r < _this.getModuleCount(); r += 1) {
+
+        qrHtml += '<tr>';
+
+        for (var c = 0; c < _this.getModuleCount(); c += 1) {
+          qrHtml += '<td style="';
+          qrHtml += ' border-width: 0px; border-style: none;';
+          qrHtml += ' border-collapse: collapse;';
+          qrHtml += ' padding: 0px; margin: 0px;';
+          qrHtml += ' width: ' + cellSize + 'px;';
+          qrHtml += ' height: ' + cellSize + 'px;';
+          qrHtml += ' background-color: ';
+          qrHtml += _this.isDark(r, c)? '#000000' : '#ffffff';
+          qrHtml += ';';
+          qrHtml += '"/>';
+        }
+
+        qrHtml += '</tr>';
+      }
+
+      qrHtml += '</tbody>';
+      qrHtml += '</table>';
+
+      return qrHtml;
+    };
+
+    _this.createSvgTag = function(cellSize, margin) {
+
+      var opts = {};
+      if (typeof arguments[0] == 'object') {
+        // Called by options.
+        opts = arguments[0];
+        // overwrite cellSize and margin.
+        cellSize = opts.cellSize;
+        margin = opts.margin;
+      }
+
+      cellSize = cellSize || 2;
+      margin = (typeof margin == 'undefined')? cellSize * 4 : margin;
+      var size = _this.getModuleCount() * cellSize + margin * 2;
+      var c, mc, r, mr, qrSvg='', rect;
+
+      rect = 'l' + cellSize + ',0 0,' + cellSize +
+        ' -' + cellSize + ',0 0,-' + cellSize + 'z ';
+
+      qrSvg += '<svg version="1.1" xmlns="http://www.w3.org/2000/svg"';
+      qrSvg += !opts.scalable ? ' width="' + size + 'px" height="' + size + 'px"' : '';
+      qrSvg += ' viewBox="0 0 ' + size + ' ' + size + '" ';
+      qrSvg += ' preserveAspectRatio="xMinYMin meet">';
+      qrSvg += '<rect width="100%" height="100%" fill="white" cx="0" cy="0"/>';
+      qrSvg += '<path d="';
+
+      for (r = 0; r < _this.getModuleCount(); r += 1) {
+        mr = r * cellSize + margin;
+        for (c = 0; c < _this.getModuleCount(); c += 1) {
+          if (_this.isDark(r, c) ) {
+            mc = c*cellSize+margin;
+            qrSvg += 'M' + mc + ',' + mr + rect;
+          }
+        }
+      }
+
+      qrSvg += '" stroke="transparent" fill="black"/>';
+      qrSvg += '</svg>';
+
+      return qrSvg;
+    };
+
+    _this.createDataURL = function(cellSize, margin) {
+
+      cellSize = cellSize || 2;
+      margin = (typeof margin == 'undefined')? cellSize * 4 : margin;
+
+      var size = _this.getModuleCount() * cellSize + margin * 2;
+      var min = margin;
+      var max = size - margin;
+
+      return createDataURL(size, size, function(x, y) {
+        if (min <= x && x < max && min <= y && y < max) {
+          var c = Math.floor( (x - min) / cellSize);
+          var r = Math.floor( (y - min) / cellSize);
+          return _this.isDark(r, c)? 0 : 1;
+        } else {
+          return 1;
+        }
+      } );
+    };
+
+    _this.createImgTag = function(cellSize, margin, alt) {
+
+      cellSize = cellSize || 2;
+      margin = (typeof margin == 'undefined')? cellSize * 4 : margin;
+
+      var size = _this.getModuleCount() * cellSize + margin * 2;
+
+      var img = '';
+      img += '<img';
+      img += '\u0020src="';
+      img += _this.createDataURL(cellSize, margin);
+      img += '"';
+      img += '\u0020width="';
+      img += size;
+      img += '"';
+      img += '\u0020height="';
+      img += size;
+      img += '"';
+      if (alt) {
+        img += '\u0020alt="';
+        img += alt;
+        img += '"';
+      }
+      img += '/>';
+
+      return img;
+    };
+
+    var _createHalfASCII = function(margin) {
+      var cellSize = 1;
+      margin = (typeof margin == 'undefined')? cellSize * 2 : margin;
+
+      var size = _this.getModuleCount() * cellSize + margin * 2;
+      var min = margin;
+      var max = size - margin;
+
+      var y, x, r1, r2, p;
+
+      var blocks = {
+        '██': '█',
+        '█ ': '▀',
+        ' █': '▄',
+        '  ': ' '
+      };
+
+      var blocksLastLineNoMargin = {
+        '██': '▀',
+        '█ ': '▀',
+        ' █': ' ',
+        '  ': ' '
+      };
+
+      var ascii = '';
+      for (y = 0; y < size; y += 2) {
+        r1 = Math.floor((y - min) / cellSize);
+        r2 = Math.floor((y + 1 - min) / cellSize);
+        for (x = 0; x < size; x += 1) {
+          p = '█';
+
+          if (min <= x && x < max && min <= y && y < max && _this.isDark(r1, Math.floor((x - min) / cellSize))) {
+            p = ' ';
+          }
+
+          if (min <= x && x < max && min <= y+1 && y+1 < max && _this.isDark(r2, Math.floor((x - min) / cellSize))) {
+            p += ' ';
+          }
+          else {
+            p += '█';
+          }
+
+          // Output 2 characters per pixel, to create full square. 1 character per pixels gives only half width of square.
+          ascii += (margin < 1 && y+1 >= max) ? blocksLastLineNoMargin[p] : blocks[p];
+        }
+
+        ascii += '\n';
+      }
+
+      if (size % 2 && margin > 0) {
+        return ascii.substring(0, ascii.length - size - 1) + Array(size+1).join('▀');
+      }
+
+      return ascii.substring(0, ascii.length-1);
+    };
+
+    _this.createASCII = function(cellSize, margin) {
+      cellSize = cellSize || 1;
+
+      if (cellSize < 2) {
+        return _createHalfASCII(margin);
+      }
+
+      cellSize -= 1;
+      margin = (typeof margin == 'undefined')? cellSize * 2 : margin;
+
+      var size = _this.getModuleCount() * cellSize + margin * 2;
+      var min = margin;
+      var max = size - margin;
+
+      var y, x, r, p;
+
+      var white = Array(cellSize+1).join('██');
+      var black = Array(cellSize+1).join('  ');
+
+      var ascii = '';
+      var line = '';
+      for (y = 0; y < size; y += 1) {
+        r = Math.floor( (y - min) / cellSize);
+        line = '';
+        for (x = 0; x < size; x += 1) {
+          p = 1;
+
+          if (min <= x && x < max && min <= y && y < max && _this.isDark(r, Math.floor((x - min) / cellSize))) {
+            p = 0;
+          }
+
+          // Output 2 characters per pixel, to create full square. 1 character per pixels gives only half width of square.
+          line += p ? white : black;
+        }
+
+        for (r = 0; r < cellSize; r += 1) {
+          ascii += line + '\n';
+        }
+      }
+
+      return ascii.substring(0, ascii.length-1);
+    };
+
+    _this.renderTo2dContext = function(context, cellSize) {
+      cellSize = cellSize || 2;
+      var length = _this.getModuleCount();
+      for (var row = 0; row < length; row++) {
+        for (var col = 0; col < length; col++) {
+          context.fillStyle = _this.isDark(row, col) ? 'black' : 'white';
+          context.fillRect(row * cellSize, col * cellSize, cellSize, cellSize);
+        }
+      }
+    }
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // qrcode.stringToBytes
+  //---------------------------------------------------------------------
+
+  qrcode.stringToBytesFuncs = {
+    'default' : function(s) {
+      var bytes = [];
+      for (var i = 0; i < s.length; i += 1) {
+        var c = s.charCodeAt(i);
+        bytes.push(c & 0xff);
+      }
+      return bytes;
+    }
+  };
+
+  qrcode.stringToBytes = qrcode.stringToBytesFuncs['default'];
+
+  //---------------------------------------------------------------------
+  // qrcode.createStringToBytes
+  //---------------------------------------------------------------------
+
+  /**
+   * @param unicodeData base64 string of byte array.
+   * [16bit Unicode],[16bit Bytes], ...
+   * @param numChars
+   */
+  qrcode.createStringToBytes = function(unicodeData, numChars) {
+
+    // create conversion map.
+
+    var unicodeMap = function() {
+
+      var bin = base64DecodeInputStream(unicodeData);
+      var read = function() {
+        var b = bin.read();
+        if (b == -1) throw 'eof';
+        return b;
+      };
+
+      var count = 0;
+      var unicodeMap = {};
+      while (true) {
+        var b0 = bin.read();
+        if (b0 == -1) break;
+        var b1 = read();
+        var b2 = read();
+        var b3 = read();
+        var k = String.fromCharCode( (b0 << 8) | b1);
+        var v = (b2 << 8) | b3;
+        unicodeMap[k] = v;
+        count += 1;
+      }
+      if (count != numChars) {
+        throw count + ' != ' + numChars;
+      }
+
+      return unicodeMap;
+    }();
+
+    var unknownChar = '?'.charCodeAt(0);
+
+    return function(s) {
+      var bytes = [];
+      for (var i = 0; i < s.length; i += 1) {
+        var c = s.charCodeAt(i);
+        if (c < 128) {
+          bytes.push(c);
+        } else {
+          var b = unicodeMap[s.charAt(i)];
+          if (typeof b == 'number') {
+            if ( (b & 0xff) == b) {
+              // 1byte
+              bytes.push(b);
+            } else {
+              // 2bytes
+              bytes.push(b >>> 8);
+              bytes.push(b & 0xff);
+            }
+          } else {
+            bytes.push(unknownChar);
+          }
+        }
+      }
+      return bytes;
+    };
+  };
+
+  //---------------------------------------------------------------------
+  // QRMode
+  //---------------------------------------------------------------------
+
+  var QRMode = {
+    MODE_NUMBER :    1 << 0,
+    MODE_ALPHA_NUM : 1 << 1,
+    MODE_8BIT_BYTE : 1 << 2,
+    MODE_KANJI :     1 << 3
+  };
+
+  //---------------------------------------------------------------------
+  // QRErrorCorrectionLevel
+  //---------------------------------------------------------------------
+
+  var QRErrorCorrectionLevel = {
+    L : 1,
+    M : 0,
+    Q : 3,
+    H : 2
+  };
+
+  //---------------------------------------------------------------------
+  // QRMaskPattern
+  //---------------------------------------------------------------------
+
+  var QRMaskPattern = {
+    PATTERN000 : 0,
+    PATTERN001 : 1,
+    PATTERN010 : 2,
+    PATTERN011 : 3,
+    PATTERN100 : 4,
+    PATTERN101 : 5,
+    PATTERN110 : 6,
+    PATTERN111 : 7
+  };
+
+  //---------------------------------------------------------------------
+  // QRUtil
+  //---------------------------------------------------------------------
+
+  var QRUtil = function() {
+
+    var PATTERN_POSITION_TABLE = [
+      [],
+      [6, 18],
+      [6, 22],
+      [6, 26],
+      [6, 30],
+      [6, 34],
+      [6, 22, 38],
+      [6, 24, 42],
+      [6, 26, 46],
+      [6, 28, 50],
+      [6, 30, 54],
+      [6, 32, 58],
+      [6, 34, 62],
+      [6, 26, 46, 66],
+      [6, 26, 48, 70],
+      [6, 26, 50, 74],
+      [6, 30, 54, 78],
+      [6, 30, 56, 82],
+      [6, 30, 58, 86],
+      [6, 34, 62, 90],
+      [6, 28, 50, 72, 94],
+      [6, 26, 50, 74, 98],
+      [6, 30, 54, 78, 102],
+      [6, 28, 54, 80, 106],
+      [6, 32, 58, 84, 110],
+      [6, 30, 58, 86, 114],
+      [6, 34, 62, 90, 118],
+      [6, 26, 50, 74, 98, 122],
+      [6, 30, 54, 78, 102, 126],
+      [6, 26, 52, 78, 104, 130],
+      [6, 30, 56, 82, 108, 134],
+      [6, 34, 60, 86, 112, 138],
+      [6, 30, 58, 86, 114, 142],
+      [6, 34, 62, 90, 118, 146],
+      [6, 30, 54, 78, 102, 126, 150],
+      [6, 24, 50, 76, 102, 128, 154],
+      [6, 28, 54, 80, 106, 132, 158],
+      [6, 32, 58, 84, 110, 136, 162],
+      [6, 26, 54, 82, 110, 138, 166],
+      [6, 30, 58, 86, 114, 142, 170]
+    ];
+    var G15 = (1 << 10) | (1 << 8) | (1 << 5) | (1 << 4) | (1 << 2) | (1 << 1) | (1 << 0);
+    var G18 = (1 << 12) | (1 << 11) | (1 << 10) | (1 << 9) | (1 << 8) | (1 << 5) | (1 << 2) | (1 << 0);
+    var G15_MASK = (1 << 14) | (1 << 12) | (1 << 10) | (1 << 4) | (1 << 1);
+
+    var _this = {};
+
+    var getBCHDigit = function(data) {
+      var digit = 0;
+      while (data != 0) {
+        digit += 1;
+        data >>>= 1;
+      }
+      return digit;
+    };
+
+    _this.getBCHTypeInfo = function(data) {
+      var d = data << 10;
+      while (getBCHDigit(d) - getBCHDigit(G15) >= 0) {
+        d ^= (G15 << (getBCHDigit(d) - getBCHDigit(G15) ) );
+      }
+      return ( (data << 10) | d) ^ G15_MASK;
+    };
+
+    _this.getBCHTypeNumber = function(data) {
+      var d = data << 12;
+      while (getBCHDigit(d) - getBCHDigit(G18) >= 0) {
+        d ^= (G18 << (getBCHDigit(d) - getBCHDigit(G18) ) );
+      }
+      return (data << 12) | d;
+    };
+
+    _this.getPatternPosition = function(typeNumber) {
+      return PATTERN_POSITION_TABLE[typeNumber - 1];
+    };
+
+    _this.getMaskFunction = function(maskPattern) {
+
+      switch (maskPattern) {
+
+      case QRMaskPattern.PATTERN000 :
+        return function(i, j) { return (i + j) % 2 == 0; };
+      case QRMaskPattern.PATTERN001 :
+        return function(i, j) { return i % 2 == 0; };
+      case QRMaskPattern.PATTERN010 :
+        return function(i, j) { return j % 3 == 0; };
+      case QRMaskPattern.PATTERN011 :
+        return function(i, j) { return (i + j) % 3 == 0; };
+      case QRMaskPattern.PATTERN100 :
+        return function(i, j) { return (Math.floor(i / 2) + Math.floor(j / 3) ) % 2 == 0; };
+      case QRMaskPattern.PATTERN101 :
+        return function(i, j) { return (i * j) % 2 + (i * j) % 3 == 0; };
+      case QRMaskPattern.PATTERN110 :
+        return function(i, j) { return ( (i * j) % 2 + (i * j) % 3) % 2 == 0; };
+      case QRMaskPattern.PATTERN111 :
+        return function(i, j) { return ( (i * j) % 3 + (i + j) % 2) % 2 == 0; };
+
+      default :
+        throw 'bad maskPattern:' + maskPattern;
+      }
+    };
+
+    _this.getErrorCorrectPolynomial = function(errorCorrectLength) {
+      var a = qrPolynomial([1], 0);
+      for (var i = 0; i < errorCorrectLength; i += 1) {
+        a = a.multiply(qrPolynomial([1, QRMath.gexp(i)], 0) );
+      }
+      return a;
+    };
+
+    _this.getLengthInBits = function(mode, type) {
+
+      if (1 <= type && type < 10) {
+
+        // 1 - 9
+
+        switch(mode) {
+        case QRMode.MODE_NUMBER    : return 10;
+        case QRMode.MODE_ALPHA_NUM : return 9;
+        case QRMode.MODE_8BIT_BYTE : return 8;
+        case QRMode.MODE_KANJI     : return 8;
+        default :
+          throw 'mode:' + mode;
+        }
+
+      } else if (type < 27) {
+
+        // 10 - 26
+
+        switch(mode) {
+        case QRMode.MODE_NUMBER    : return 12;
+        case QRMode.MODE_ALPHA_NUM : return 11;
+        case QRMode.MODE_8BIT_BYTE : return 16;
+        case QRMode.MODE_KANJI     : return 10;
+        default :
+          throw 'mode:' + mode;
+        }
+
+      } else if (type < 41) {
+
+        // 27 - 40
+
+        switch(mode) {
+        case QRMode.MODE_NUMBER    : return 14;
+        case QRMode.MODE_ALPHA_NUM : return 13;
+        case QRMode.MODE_8BIT_BYTE : return 16;
+        case QRMode.MODE_KANJI     : return 12;
+        default :
+          throw 'mode:' + mode;
+        }
+
+      } else {
+        throw 'type:' + type;
+      }
+    };
+
+    _this.getLostPoint = function(qrcode) {
+
+      var moduleCount = qrcode.getModuleCount();
+
+      var lostPoint = 0;
+
+      // LEVEL1
+
+      for (var row = 0; row < moduleCount; row += 1) {
+        for (var col = 0; col < moduleCount; col += 1) {
+
+          var sameCount = 0;
+          var dark = qrcode.isDark(row, col);
+
+          for (var r = -1; r <= 1; r += 1) {
+
+            if (row + r < 0 || moduleCount <= row + r) {
+              continue;
+            }
+
+            for (var c = -1; c <= 1; c += 1) {
+
+              if (col + c < 0 || moduleCount <= col + c) {
+                continue;
+              }
+
+              if (r == 0 && c == 0) {
+                continue;
+              }
+
+              if (dark == qrcode.isDark(row + r, col + c) ) {
+                sameCount += 1;
+              }
+            }
+          }
+
+          if (sameCount > 5) {
+            lostPoint += (3 + sameCount - 5);
+          }
+        }
+      };
+
+      // LEVEL2
+
+      for (var row = 0; row < moduleCount - 1; row += 1) {
+        for (var col = 0; col < moduleCount - 1; col += 1) {
+          var count = 0;
+          if (qrcode.isDark(row, col) ) count += 1;
+          if (qrcode.isDark(row + 1, col) ) count += 1;
+          if (qrcode.isDark(row, col + 1) ) count += 1;
+          if (qrcode.isDark(row + 1, col + 1) ) count += 1;
+          if (count == 0 || count == 4) {
+            lostPoint += 3;
+          }
+        }
+      }
+
+      // LEVEL3
+
+      for (var row = 0; row < moduleCount; row += 1) {
+        for (var col = 0; col < moduleCount - 6; col += 1) {
+          if (qrcode.isDark(row, col)
+              && !qrcode.isDark(row, col + 1)
+              &&  qrcode.isDark(row, col + 2)
+              &&  qrcode.isDark(row, col + 3)
+              &&  qrcode.isDark(row, col + 4)
+              && !qrcode.isDark(row, col + 5)
+              &&  qrcode.isDark(row, col + 6) ) {
+            lostPoint += 40;
+          }
+        }
+      }
+
+      for (var col = 0; col < moduleCount; col += 1) {
+        for (var row = 0; row < moduleCount - 6; row += 1) {
+          if (qrcode.isDark(row, col)
+              && !qrcode.isDark(row + 1, col)
+              &&  qrcode.isDark(row + 2, col)
+              &&  qrcode.isDark(row + 3, col)
+              &&  qrcode.isDark(row + 4, col)
+              && !qrcode.isDark(row + 5, col)
+              &&  qrcode.isDark(row + 6, col) ) {
+            lostPoint += 40;
+          }
+        }
+      }
+
+      // LEVEL4
+
+      var darkCount = 0;
+
+      for (var col = 0; col < moduleCount; col += 1) {
+        for (var row = 0; row < moduleCount; row += 1) {
+          if (qrcode.isDark(row, col) ) {
+            darkCount += 1;
+          }
+        }
+      }
+
+      var ratio = Math.abs(100 * darkCount / moduleCount / moduleCount - 50) / 5;
+      lostPoint += ratio * 10;
+
+      return lostPoint;
+    };
+
+    return _this;
+  }();
+
+  //---------------------------------------------------------------------
+  // QRMath
+  //---------------------------------------------------------------------
+
+  var QRMath = function() {
+
+    var EXP_TABLE = new Array(256);
+    var LOG_TABLE = new Array(256);
+
+    // initialize tables
+    for (var i = 0; i < 8; i += 1) {
+      EXP_TABLE[i] = 1 << i;
+    }
+    for (var i = 8; i < 256; i += 1) {
+      EXP_TABLE[i] = EXP_TABLE[i - 4]
+        ^ EXP_TABLE[i - 5]
+        ^ EXP_TABLE[i - 6]
+        ^ EXP_TABLE[i - 8];
+    }
+    for (var i = 0; i < 255; i += 1) {
+      LOG_TABLE[EXP_TABLE[i] ] = i;
+    }
+
+    var _this = {};
+
+    _this.glog = function(n) {
+
+      if (n < 1) {
+        throw 'glog(' + n + ')';
+      }
+
+      return LOG_TABLE[n];
+    };
+
+    _this.gexp = function(n) {
+
+      while (n < 0) {
+        n += 255;
+      }
+
+      while (n >= 256) {
+        n -= 255;
+      }
+
+      return EXP_TABLE[n];
+    };
+
+    return _this;
+  }();
+
+  //---------------------------------------------------------------------
+  // qrPolynomial
+  //---------------------------------------------------------------------
+
+  function qrPolynomial(num, shift) {
+
+    if (typeof num.length == 'undefined') {
+      throw num.length + '/' + shift;
+    }
+
+    var _num = function() {
+      var offset = 0;
+      while (offset < num.length && num[offset] == 0) {
+        offset += 1;
+      }
+      var _num = new Array(num.length - offset + shift);
+      for (var i = 0; i < num.length - offset; i += 1) {
+        _num[i] = num[i + offset];
+      }
+      return _num;
+    }();
+
+    var _this = {};
+
+    _this.getAt = function(index) {
+      return _num[index];
+    };
+
+    _this.getLength = function() {
+      return _num.length;
+    };
+
+    _this.multiply = function(e) {
+
+      var num = new Array(_this.getLength() + e.getLength() - 1);
+
+      for (var i = 0; i < _this.getLength(); i += 1) {
+        for (var j = 0; j < e.getLength(); j += 1) {
+          num[i + j] ^= QRMath.gexp(QRMath.glog(_this.getAt(i) ) + QRMath.glog(e.getAt(j) ) );
+        }
+      }
+
+      return qrPolynomial(num, 0);
+    };
+
+    _this.mod = function(e) {
+
+      if (_this.getLength() - e.getLength() < 0) {
+        return _this;
+      }
+
+      var ratio = QRMath.glog(_this.getAt(0) ) - QRMath.glog(e.getAt(0) );
+
+      var num = new Array(_this.getLength() );
+      for (var i = 0; i < _this.getLength(); i += 1) {
+        num[i] = _this.getAt(i);
+      }
+
+      for (var i = 0; i < e.getLength(); i += 1) {
+        num[i] ^= QRMath.gexp(QRMath.glog(e.getAt(i) ) + ratio);
+      }
+
+      // recursive call
+      return qrPolynomial(num, 0).mod(e);
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // QRRSBlock
+  //---------------------------------------------------------------------
+
+  var QRRSBlock = function() {
+
+    var RS_BLOCK_TABLE = [
+
+      // L
+      // M
+      // Q
+      // H
+
+      // 1
+      [1, 26, 19],
+      [1, 26, 16],
+      [1, 26, 13],
+      [1, 26, 9],
+
+      // 2
+      [1, 44, 34],
+      [1, 44, 28],
+      [1, 44, 22],
+      [1, 44, 16],
+
+      // 3
+      [1, 70, 55],
+      [1, 70, 44],
+      [2, 35, 17],
+      [2, 35, 13],
+
+      // 4
+      [1, 100, 80],
+      [2, 50, 32],
+      [2, 50, 24],
+      [4, 25, 9],
+
+      // 5
+      [1, 134, 108],
+      [2, 67, 43],
+      [2, 33, 15, 2, 34, 16],
+      [2, 33, 11, 2, 34, 12],
+
+      // 6
+      [2, 86, 68],
+      [4, 43, 27],
+      [4, 43, 19],
+      [4, 43, 15],
+
+      // 7
+      [2, 98, 78],
+      [4, 49, 31],
+      [2, 32, 14, 4, 33, 15],
+      [4, 39, 13, 1, 40, 14],
+
+      // 8
+      [2, 121, 97],
+      [2, 60, 38, 2, 61, 39],
+      [4, 40, 18, 2, 41, 19],
+      [4, 40, 14, 2, 41, 15],
+
+      // 9
+      [2, 146, 116],
+      [3, 58, 36, 2, 59, 37],
+      [4, 36, 16, 4, 37, 17],
+      [4, 36, 12, 4, 37, 13],
+
+      // 10
+      [2, 86, 68, 2, 87, 69],
+      [4, 69, 43, 1, 70, 44],
+      [6, 43, 19, 2, 44, 20],
+      [6, 43, 15, 2, 44, 16],
+
+      // 11
+      [4, 101, 81],
+      [1, 80, 50, 4, 81, 51],
+      [4, 50, 22, 4, 51, 23],
+      [3, 36, 12, 8, 37, 13],
+
+      // 12
+      [2, 116, 92, 2, 117, 93],
+      [6, 58, 36, 2, 59, 37],
+      [4, 46, 20, 6, 47, 21],
+      [7, 42, 14, 4, 43, 15],
+
+      // 13
+      [4, 133, 107],
+      [8, 59, 37, 1, 60, 38],
+      [8, 44, 20, 4, 45, 21],
+      [12, 33, 11, 4, 34, 12],
+
+      // 14
+      [3, 145, 115, 1, 146, 116],
+      [4, 64, 40, 5, 65, 41],
+      [11, 36, 16, 5, 37, 17],
+      [11, 36, 12, 5, 37, 13],
+
+      // 15
+      [5, 109, 87, 1, 110, 88],
+      [5, 65, 41, 5, 66, 42],
+      [5, 54, 24, 7, 55, 25],
+      [11, 36, 12, 7, 37, 13],
+
+      // 16
+      [5, 122, 98, 1, 123, 99],
+      [7, 73, 45, 3, 74, 46],
+      [15, 43, 19, 2, 44, 20],
+      [3, 45, 15, 13, 46, 16],
+
+      // 17
+      [1, 135, 107, 5, 136, 108],
+      [10, 74, 46, 1, 75, 47],
+      [1, 50, 22, 15, 51, 23],
+      [2, 42, 14, 17, 43, 15],
+
+      // 18
+      [5, 150, 120, 1, 151, 121],
+      [9, 69, 43, 4, 70, 44],
+      [17, 50, 22, 1, 51, 23],
+      [2, 42, 14, 19, 43, 15],
+
+      // 19
+      [3, 141, 113, 4, 142, 114],
+      [3, 70, 44, 11, 71, 45],
+      [17, 47, 21, 4, 48, 22],
+      [9, 39, 13, 16, 40, 14],
+
+      // 20
+      [3, 135, 107, 5, 136, 108],
+      [3, 67, 41, 13, 68, 42],
+      [15, 54, 24, 5, 55, 25],
+      [15, 43, 15, 10, 44, 16],
+
+      // 21
+      [4, 144, 116, 4, 145, 117],
+      [17, 68, 42],
+      [17, 50, 22, 6, 51, 23],
+      [19, 46, 16, 6, 47, 17],
+
+      // 22
+      [2, 139, 111, 7, 140, 112],
+      [17, 74, 46],
+      [7, 54, 24, 16, 55, 25],
+      [34, 37, 13],
+
+      // 23
+      [4, 151, 121, 5, 152, 122],
+      [4, 75, 47, 14, 76, 48],
+      [11, 54, 24, 14, 55, 25],
+      [16, 45, 15, 14, 46, 16],
+
+      // 24
+      [6, 147, 117, 4, 148, 118],
+      [6, 73, 45, 14, 74, 46],
+      [11, 54, 24, 16, 55, 25],
+      [30, 46, 16, 2, 47, 17],
+
+      // 25
+      [8, 132, 106, 4, 133, 107],
+      [8, 75, 47, 13, 76, 48],
+      [7, 54, 24, 22, 55, 25],
+      [22, 45, 15, 13, 46, 16],
+
+      // 26
+      [10, 142, 114, 2, 143, 115],
+      [19, 74, 46, 4, 75, 47],
+      [28, 50, 22, 6, 51, 23],
+      [33, 46, 16, 4, 47, 17],
+
+      // 27
+      [8, 152, 122, 4, 153, 123],
+      [22, 73, 45, 3, 74, 46],
+      [8, 53, 23, 26, 54, 24],
+      [12, 45, 15, 28, 46, 16],
+
+      // 28
+      [3, 147, 117, 10, 148, 118],
+      [3, 73, 45, 23, 74, 46],
+      [4, 54, 24, 31, 55, 25],
+      [11, 45, 15, 31, 46, 16],
+
+      // 29
+      [7, 146, 116, 7, 147, 117],
+      [21, 73, 45, 7, 74, 46],
+      [1, 53, 23, 37, 54, 24],
+      [19, 45, 15, 26, 46, 16],
+
+      // 30
+      [5, 145, 115, 10, 146, 116],
+      [19, 75, 47, 10, 76, 48],
+      [15, 54, 24, 25, 55, 25],
+      [23, 45, 15, 25, 46, 16],
+
+      // 31
+      [13, 145, 115, 3, 146, 116],
+      [2, 74, 46, 29, 75, 47],
+      [42, 54, 24, 1, 55, 25],
+      [23, 45, 15, 28, 46, 16],
+
+      // 32
+      [17, 145, 115],
+      [10, 74, 46, 23, 75, 47],
+      [10, 54, 24, 35, 55, 25],
+      [19, 45, 15, 35, 46, 16],
+
+      // 33
+      [17, 145, 115, 1, 146, 116],
+      [14, 74, 46, 21, 75, 47],
+      [29, 54, 24, 19, 55, 25],
+      [11, 45, 15, 46, 46, 16],
+
+      // 34
+      [13, 145, 115, 6, 146, 116],
+      [14, 74, 46, 23, 75, 47],
+      [44, 54, 24, 7, 55, 25],
+      [59, 46, 16, 1, 47, 17],
+
+      // 35
+      [12, 151, 121, 7, 152, 122],
+      [12, 75, 47, 26, 76, 48],
+      [39, 54, 24, 14, 55, 25],
+      [22, 45, 15, 41, 46, 16],
+
+      // 36
+      [6, 151, 121, 14, 152, 122],
+      [6, 75, 47, 34, 76, 48],
+      [46, 54, 24, 10, 55, 25],
+      [2, 45, 15, 64, 46, 16],
+
+      // 37
+      [17, 152, 122, 4, 153, 123],
+      [29, 74, 46, 14, 75, 47],
+      [49, 54, 24, 10, 55, 25],
+      [24, 45, 15, 46, 46, 16],
+
+      // 38
+      [4, 152, 122, 18, 153, 123],
+      [13, 74, 46, 32, 75, 47],
+      [48, 54, 24, 14, 55, 25],
+      [42, 45, 15, 32, 46, 16],
+
+      // 39
+      [20, 147, 117, 4, 148, 118],
+      [40, 75, 47, 7, 76, 48],
+      [43, 54, 24, 22, 55, 25],
+      [10, 45, 15, 67, 46, 16],
+
+      // 40
+      [19, 148, 118, 6, 149, 119],
+      [18, 75, 47, 31, 76, 48],
+      [34, 54, 24, 34, 55, 25],
+      [20, 45, 15, 61, 46, 16]
+    ];
+
+    var qrRSBlock = function(totalCount, dataCount) {
+      var _this = {};
+      _this.totalCount = totalCount;
+      _this.dataCount = dataCount;
+      return _this;
+    };
+
+    var _this = {};
+
+    var getRsBlockTable = function(typeNumber, errorCorrectionLevel) {
+
+      switch(errorCorrectionLevel) {
+      case QRErrorCorrectionLevel.L :
+        return RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 0];
+      case QRErrorCorrectionLevel.M :
+        return RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 1];
+      case QRErrorCorrectionLevel.Q :
+        return RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 2];
+      case QRErrorCorrectionLevel.H :
+        return RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 3];
+      default :
+        return undefined;
+      }
+    };
+
+    _this.getRSBlocks = function(typeNumber, errorCorrectionLevel) {
+
+      var rsBlock = getRsBlockTable(typeNumber, errorCorrectionLevel);
+
+      if (typeof rsBlock == 'undefined') {
+        throw 'bad rs block @ typeNumber:' + typeNumber +
+            '/errorCorrectionLevel:' + errorCorrectionLevel;
+      }
+
+      var length = rsBlock.length / 3;
+
+      var list = [];
+
+      for (var i = 0; i < length; i += 1) {
+
+        var count = rsBlock[i * 3 + 0];
+        var totalCount = rsBlock[i * 3 + 1];
+        var dataCount = rsBlock[i * 3 + 2];
+
+        for (var j = 0; j < count; j += 1) {
+          list.push(qrRSBlock(totalCount, dataCount) );
+        }
+      }
+
+      return list;
+    };
+
+    return _this;
+  }();
+
+  //---------------------------------------------------------------------
+  // qrBitBuffer
+  //---------------------------------------------------------------------
+
+  var qrBitBuffer = function() {
+
+    var _buffer = [];
+    var _length = 0;
+
+    var _this = {};
+
+    _this.getBuffer = function() {
+      return _buffer;
+    };
+
+    _this.getAt = function(index) {
+      var bufIndex = Math.floor(index / 8);
+      return ( (_buffer[bufIndex] >>> (7 - index % 8) ) & 1) == 1;
+    };
+
+    _this.put = function(num, length) {
+      for (var i = 0; i < length; i += 1) {
+        _this.putBit( ( (num >>> (length - i - 1) ) & 1) == 1);
+      }
+    };
+
+    _this.getLengthInBits = function() {
+      return _length;
+    };
+
+    _this.putBit = function(bit) {
+
+      var bufIndex = Math.floor(_length / 8);
+      if (_buffer.length <= bufIndex) {
+        _buffer.push(0);
+      }
+
+      if (bit) {
+        _buffer[bufIndex] |= (0x80 >>> (_length % 8) );
+      }
+
+      _length += 1;
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // qrNumber
+  //---------------------------------------------------------------------
+
+  var qrNumber = function(data) {
+
+    var _mode = QRMode.MODE_NUMBER;
+    var _data = data;
+
+    var _this = {};
+
+    _this.getMode = function() {
+      return _mode;
+    };
+
+    _this.getLength = function(buffer) {
+      return _data.length;
+    };
+
+    _this.write = function(buffer) {
+
+      var data = _data;
+
+      var i = 0;
+
+      while (i + 2 < data.length) {
+        buffer.put(strToNum(data.substring(i, i + 3) ), 10);
+        i += 3;
+      }
+
+      if (i < data.length) {
+        if (data.length - i == 1) {
+          buffer.put(strToNum(data.substring(i, i + 1) ), 4);
+        } else if (data.length - i == 2) {
+          buffer.put(strToNum(data.substring(i, i + 2) ), 7);
+        }
+      }
+    };
+
+    var strToNum = function(s) {
+      var num = 0;
+      for (var i = 0; i < s.length; i += 1) {
+        num = num * 10 + chatToNum(s.charAt(i) );
+      }
+      return num;
+    };
+
+    var chatToNum = function(c) {
+      if ('0' <= c && c <= '9') {
+        return c.charCodeAt(0) - '0'.charCodeAt(0);
+      }
+      throw 'illegal char :' + c;
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // qrAlphaNum
+  //---------------------------------------------------------------------
+
+  var qrAlphaNum = function(data) {
+
+    var _mode = QRMode.MODE_ALPHA_NUM;
+    var _data = data;
+
+    var _this = {};
+
+    _this.getMode = function() {
+      return _mode;
+    };
+
+    _this.getLength = function(buffer) {
+      return _data.length;
+    };
+
+    _this.write = function(buffer) {
+
+      var s = _data;
+
+      var i = 0;
+
+      while (i + 1 < s.length) {
+        buffer.put(
+          getCode(s.charAt(i) ) * 45 +
+          getCode(s.charAt(i + 1) ), 11);
+        i += 2;
+      }
+
+      if (i < s.length) {
+        buffer.put(getCode(s.charAt(i) ), 6);
+      }
+    };
+
+    var getCode = function(c) {
+
+      if ('0' <= c && c <= '9') {
+        return c.charCodeAt(0) - '0'.charCodeAt(0);
+      } else if ('A' <= c && c <= 'Z') {
+        return c.charCodeAt(0) - 'A'.charCodeAt(0) + 10;
+      } else {
+        switch (c) {
+        case ' ' : return 36;
+        case '$' : return 37;
+        case '%' : return 38;
+        case '*' : return 39;
+        case '+' : return 40;
+        case '-' : return 41;
+        case '.' : return 42;
+        case '/' : return 43;
+        case ':' : return 44;
+        default :
+          throw 'illegal char :' + c;
+        }
+      }
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // qr8BitByte
+  //---------------------------------------------------------------------
+
+  var qr8BitByte = function(data) {
+
+    var _mode = QRMode.MODE_8BIT_BYTE;
+    var _data = data;
+    var _bytes = qrcode.stringToBytes(data);
+
+    var _this = {};
+
+    _this.getMode = function() {
+      return _mode;
+    };
+
+    _this.getLength = function(buffer) {
+      return _bytes.length;
+    };
+
+    _this.write = function(buffer) {
+      for (var i = 0; i < _bytes.length; i += 1) {
+        buffer.put(_bytes[i], 8);
+      }
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // qrKanji
+  //---------------------------------------------------------------------
+
+  var qrKanji = function(data) {
+
+    var _mode = QRMode.MODE_KANJI;
+    var _data = data;
+
+    var stringToBytes = qrcode.stringToBytesFuncs['SJIS'];
+    if (!stringToBytes) {
+      throw 'sjis not supported.';
+    }
+    !function(c, code) {
+      // self test for sjis support.
+      var test = stringToBytes(c);
+      if (test.length != 2 || ( (test[0] << 8) | test[1]) != code) {
+        throw 'sjis not supported.';
+      }
+    }('\u53cb', 0x9746);
+
+    var _bytes = stringToBytes(data);
+
+    var _this = {};
+
+    _this.getMode = function() {
+      return _mode;
+    };
+
+    _this.getLength = function(buffer) {
+      return ~~(_bytes.length / 2);
+    };
+
+    _this.write = function(buffer) {
+
+      var data = _bytes;
+
+      var i = 0;
+
+      while (i + 1 < data.length) {
+
+        var c = ( (0xff & data[i]) << 8) | (0xff & data[i + 1]);
+
+        if (0x8140 <= c && c <= 0x9FFC) {
+          c -= 0x8140;
+        } else if (0xE040 <= c && c <= 0xEBBF) {
+          c -= 0xC140;
+        } else {
+          throw 'illegal char at ' + (i + 1) + '/' + c;
+        }
+
+        c = ( (c >>> 8) & 0xff) * 0xC0 + (c & 0xff);
+
+        buffer.put(c, 13);
+
+        i += 2;
+      }
+
+      if (i < data.length) {
+        throw 'illegal char at ' + (i + 1);
+      }
+    };
+
+    return _this;
+  };
+
+  //=====================================================================
+  // GIF Support etc.
+  //
+
+  //---------------------------------------------------------------------
+  // byteArrayOutputStream
+  //---------------------------------------------------------------------
+
+  var byteArrayOutputStream = function() {
+
+    var _bytes = [];
+
+    var _this = {};
+
+    _this.writeByte = function(b) {
+      _bytes.push(b & 0xff);
+    };
+
+    _this.writeShort = function(i) {
+      _this.writeByte(i);
+      _this.writeByte(i >>> 8);
+    };
+
+    _this.writeBytes = function(b, off, len) {
+      off = off || 0;
+      len = len || b.length;
+      for (var i = 0; i < len; i += 1) {
+        _this.writeByte(b[i + off]);
+      }
+    };
+
+    _this.writeString = function(s) {
+      for (var i = 0; i < s.length; i += 1) {
+        _this.writeByte(s.charCodeAt(i) );
+      }
+    };
+
+    _this.toByteArray = function() {
+      return _bytes;
+    };
+
+    _this.toString = function() {
+      var s = '';
+      s += '[';
+      for (var i = 0; i < _bytes.length; i += 1) {
+        if (i > 0) {
+          s += ',';
+        }
+        s += _bytes[i];
+      }
+      s += ']';
+      return s;
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // base64EncodeOutputStream
+  //---------------------------------------------------------------------
+
+  var base64EncodeOutputStream = function() {
+
+    var _buffer = 0;
+    var _buflen = 0;
+    var _length = 0;
+    var _base64 = '';
+
+    var _this = {};
+
+    var writeEncoded = function(b) {
+      _base64 += String.fromCharCode(encode(b & 0x3f) );
+    };
+
+    var encode = function(n) {
+      if (n < 0) {
+        // error.
+      } else if (n < 26) {
+        return 0x41 + n;
+      } else if (n < 52) {
+        return 0x61 + (n - 26);
+      } else if (n < 62) {
+        return 0x30 + (n - 52);
+      } else if (n == 62) {
+        return 0x2b;
+      } else if (n == 63) {
+        return 0x2f;
+      }
+      throw 'n:' + n;
+    };
+
+    _this.writeByte = function(n) {
+
+      _buffer = (_buffer << 8) | (n & 0xff);
+      _buflen += 8;
+      _length += 1;
+
+      while (_buflen >= 6) {
+        writeEncoded(_buffer >>> (_buflen - 6) );
+        _buflen -= 6;
+      }
+    };
+
+    _this.flush = function() {
+
+      if (_buflen > 0) {
+        writeEncoded(_buffer << (6 - _buflen) );
+        _buffer = 0;
+        _buflen = 0;
+      }
+
+      if (_length % 3 != 0) {
+        // padding
+        var padlen = 3 - _length % 3;
+        for (var i = 0; i < padlen; i += 1) {
+          _base64 += '=';
+        }
+      }
+    };
+
+    _this.toString = function() {
+      return _base64;
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // base64DecodeInputStream
+  //---------------------------------------------------------------------
+
+  var base64DecodeInputStream = function(str) {
+
+    var _str = str;
+    var _pos = 0;
+    var _buffer = 0;
+    var _buflen = 0;
+
+    var _this = {};
+
+    _this.read = function() {
+
+      while (_buflen < 8) {
+
+        if (_pos >= _str.length) {
+          if (_buflen == 0) {
+            return -1;
+          }
+          throw 'unexpected end of file./' + _buflen;
+        }
+
+        var c = _str.charAt(_pos);
+        _pos += 1;
+
+        if (c == '=') {
+          _buflen = 0;
+          return -1;
+        } else if (c.match(/^\s$/) ) {
+          // ignore if whitespace.
+          continue;
+        }
+
+        _buffer = (_buffer << 6) | decode(c.charCodeAt(0) );
+        _buflen += 6;
+      }
+
+      var n = (_buffer >>> (_buflen - 8) ) & 0xff;
+      _buflen -= 8;
+      return n;
+    };
+
+    var decode = function(c) {
+      if (0x41 <= c && c <= 0x5a) {
+        return c - 0x41;
+      } else if (0x61 <= c && c <= 0x7a) {
+        return c - 0x61 + 26;
+      } else if (0x30 <= c && c <= 0x39) {
+        return c - 0x30 + 52;
+      } else if (c == 0x2b) {
+        return 62;
+      } else if (c == 0x2f) {
+        return 63;
+      } else {
+        throw 'c:' + c;
+      }
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // gifImage (B/W)
+  //---------------------------------------------------------------------
+
+  var gifImage = function(width, height) {
+
+    var _width = width;
+    var _height = height;
+    var _data = new Array(width * height);
+
+    var _this = {};
+
+    _this.setPixel = function(x, y, pixel) {
+      _data[y * _width + x] = pixel;
+    };
+
+    _this.write = function(out) {
+
+      //---------------------------------
+      // GIF Signature
+
+      out.writeString('GIF87a');
+
+      //---------------------------------
+      // Screen Descriptor
+
+      out.writeShort(_width);
+      out.writeShort(_height);
+
+      out.writeByte(0x80); // 2bit
+      out.writeByte(0);
+      out.writeByte(0);
+
+      //---------------------------------
+      // Global Color Map
+
+      // black
+      out.writeByte(0x00);
+      out.writeByte(0x00);
+      out.writeByte(0x00);
+
+      // white
+      out.writeByte(0xff);
+      out.writeByte(0xff);
+      out.writeByte(0xff);
+
+      //---------------------------------
+      // Image Descriptor
+
+      out.writeString(',');
+      out.writeShort(0);
+      out.writeShort(0);
+      out.writeShort(_width);
+      out.writeShort(_height);
+      out.writeByte(0);
+
+      //---------------------------------
+      // Local Color Map
+
+      //---------------------------------
+      // Raster Data
+
+      var lzwMinCodeSize = 2;
+      var raster = getLZWRaster(lzwMinCodeSize);
+
+      out.writeByte(lzwMinCodeSize);
+
+      var offset = 0;
+
+      while (raster.length - offset > 255) {
+        out.writeByte(255);
+        out.writeBytes(raster, offset, 255);
+        offset += 255;
+      }
+
+      out.writeByte(raster.length - offset);
+      out.writeBytes(raster, offset, raster.length - offset);
+      out.writeByte(0x00);
+
+      //---------------------------------
+      // GIF Terminator
+      out.writeString(';');
+    };
+
+    var bitOutputStream = function(out) {
+
+      var _out = out;
+      var _bitLength = 0;
+      var _bitBuffer = 0;
+
+      var _this = {};
+
+      _this.write = function(data, length) {
+
+        if ( (data >>> length) != 0) {
+          throw 'length over';
+        }
+
+        while (_bitLength + length >= 8) {
+          _out.writeByte(0xff & ( (data << _bitLength) | _bitBuffer) );
+          length -= (8 - _bitLength);
+          data >>>= (8 - _bitLength);
+          _bitBuffer = 0;
+          _bitLength = 0;
+        }
+
+        _bitBuffer = (data << _bitLength) | _bitBuffer;
+        _bitLength = _bitLength + length;
+      };
+
+      _this.flush = function() {
+        if (_bitLength > 0) {
+          _out.writeByte(_bitBuffer);
+        }
+      };
+
+      return _this;
+    };
+
+    var getLZWRaster = function(lzwMinCodeSize) {
+
+      var clearCode = 1 << lzwMinCodeSize;
+      var endCode = (1 << lzwMinCodeSize) + 1;
+      var bitLength = lzwMinCodeSize + 1;
+
+      // Setup LZWTable
+      var table = lzwTable();
+
+      for (var i = 0; i < clearCode; i += 1) {
+        table.add(String.fromCharCode(i) );
+      }
+      table.add(String.fromCharCode(clearCode) );
+      table.add(String.fromCharCode(endCode) );
+
+      var byteOut = byteArrayOutputStream();
+      var bitOut = bitOutputStream(byteOut);
+
+      // clear code
+      bitOut.write(clearCode, bitLength);
+
+      var dataIndex = 0;
+
+      var s = String.fromCharCode(_data[dataIndex]);
+      dataIndex += 1;
+
+      while (dataIndex < _data.length) {
+
+        var c = String.fromCharCode(_data[dataIndex]);
+        dataIndex += 1;
+
+        if (table.contains(s + c) ) {
+
+          s = s + c;
+
+        } else {
+
+          bitOut.write(table.indexOf(s), bitLength);
+
+          if (table.size() < 0xfff) {
+
+            if (table.size() == (1 << bitLength) ) {
+              bitLength += 1;
+            }
+
+            table.add(s + c);
+          }
+
+          s = c;
+        }
+      }
+
+      bitOut.write(table.indexOf(s), bitLength);
+
+      // end code
+      bitOut.write(endCode, bitLength);
+
+      bitOut.flush();
+
+      return byteOut.toByteArray();
+    };
+
+    var lzwTable = function() {
+
+      var _map = {};
+      var _size = 0;
+
+      var _this = {};
+
+      _this.add = function(key) {
+        if (_this.contains(key) ) {
+          throw 'dup key:' + key;
+        }
+        _map[key] = _size;
+        _size += 1;
+      };
+
+      _this.size = function() {
+        return _size;
+      };
+
+      _this.indexOf = function(key) {
+        return _map[key];
+      };
+
+      _this.contains = function(key) {
+        return typeof _map[key] != 'undefined';
+      };
+
+      return _this;
+    };
+
+    return _this;
+  };
+
+  var createDataURL = function(width, height, getPixel) {
+    var gif = gifImage(width, height);
+    for (var y = 0; y < height; y += 1) {
+      for (var x = 0; x < width; x += 1) {
+        gif.setPixel(x, y, getPixel(x, y) );
+      }
+    }
+
+    var b = byteArrayOutputStream();
+    gif.write(b);
+
+    var base64 = base64EncodeOutputStream();
+    var bytes = b.toByteArray();
+    for (var i = 0; i < bytes.length; i += 1) {
+      base64.writeByte(bytes[i]);
+    }
+    base64.flush();
+
+    return 'data:image/gif;base64,' + base64;
+  };
+
+  //---------------------------------------------------------------------
+  // returns qrcode function.
+
+  return qrcode;
+}();
+
+// multibyte support
+!function() {
+
+  qrcode.stringToBytesFuncs['UTF-8'] = function(s) {
+    // http://stackoverflow.com/questions/18729405/how-to-convert-utf8-string-to-byte-array
+    function toUTF8Array(str) {
+      var utf8 = [];
+      for (var i=0; i < str.length; i++) {
+        var charcode = str.charCodeAt(i);
+        if (charcode < 0x80) utf8.push(charcode);
+        else if (charcode < 0x800) {
+          utf8.push(0xc0 | (charcode >> 6),
+              0x80 | (charcode & 0x3f));
+        }
+        else if (charcode < 0xd800 || charcode >= 0xe000) {
+          utf8.push(0xe0 | (charcode >> 12),
+              0x80 | ((charcode>>6) & 0x3f),
+              0x80 | (charcode & 0x3f));
+        }
+        // surrogate pair
+        else {
+          i++;
+          // UTF-16 encodes 0x10000-0x10FFFF by
+          // subtracting 0x10000 and splitting the
+          // 20 bits of 0x0-0xFFFFF into two halves
+          charcode = 0x10000 + (((charcode & 0x3ff)<<10)
+            | (str.charCodeAt(i) & 0x3ff));
+          utf8.push(0xf0 | (charcode >>18),
+              0x80 | ((charcode>>12) & 0x3f),
+              0x80 | ((charcode>>6) & 0x3f),
+              0x80 | (charcode & 0x3f));
+        }
+      }
+      return utf8;
+    }
+    return toUTF8Array(s);
+  };
+
+}();
+
+(function (factory) {
+  if (true) {
+      !(__WEBPACK_AMD_DEFINE_ARRAY__ = [], __WEBPACK_AMD_DEFINE_FACTORY__ = (factory),
+				__WEBPACK_AMD_DEFINE_RESULT__ = (typeof __WEBPACK_AMD_DEFINE_FACTORY__ === 'function' ?
+				(__WEBPACK_AMD_DEFINE_FACTORY__.apply(exports, __WEBPACK_AMD_DEFINE_ARRAY__)) : __WEBPACK_AMD_DEFINE_FACTORY__),
+				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
+  } else {}
+}(function () {
+    return qrcode;
+}));
+
+
+/***/ }),
+
 /***/ "./node_modules/querystringify/index.js":
 /*!**********************************************!*\
   !*** ./node_modules/querystringify/index.js ***!
@@ -26291,2658 +28565,6 @@ module.exports = function required(port, protocol) {
 
 /***/ }),
 
-/***/ "./node_modules/rest/UrlBuilder.js":
-/*!*****************************************!*\
-  !*** ./node_modules/rest/UrlBuilder.js ***!
-  \*****************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-var __WEBPACK_AMD_DEFINE_RESULT__;/*
- * Copyright 2012-2013 the original author or authors
- * @license MIT, see LICENSE.txt for details
- *
- * @author Scott Andrews
- */
-
-(function (define, location) {
-	'use strict';
-
-	var undef;
-
-	!(__WEBPACK_AMD_DEFINE_RESULT__ = (function (require) {
-
-		var mixin, origin, urlRE, absoluteUrlRE, fullyQualifiedUrlRE;
-
-		mixin = __webpack_require__(/*! ./util/mixin */ "./node_modules/rest/util/mixin.js");
-
-		urlRE = /([a-z][a-z0-9\+\-\.]*:)\/\/([^@]+@)?(([^:\/]+)(:([0-9]+))?)?(\/[^?#]*)?(\?[^#]*)?(#\S*)?/i;
-		absoluteUrlRE = /^([a-z][a-z0-9\-\+\.]*:\/\/|\/)/i;
-		fullyQualifiedUrlRE = /([a-z][a-z0-9\+\-\.]*:)\/\/([^@]+@)?(([^:\/]+)(:([0-9]+))?)?\//i;
-
-		/**
-		 * Apply params to the template to create a URL.
-		 *
-		 * Parameters that are not applied directly to the template, are appended
-		 * to the URL as query string parameters.
-		 *
-		 * @param {string} template the URI template
-		 * @param {Object} params parameters to apply to the template
-		 * @return {string} the resulting URL
-		 */
-		function buildUrl(template, params) {
-			// internal builder to convert template with params.
-			var url, name, queryStringParams, re;
-
-			url = template;
-			queryStringParams = {};
-
-			if (params) {
-				for (name in params) {
-					/*jshint forin:false */
-					re = new RegExp('\\{' + name + '\\}');
-					if (re.test(url)) {
-						url = url.replace(re, encodeURIComponent(params[name]), 'g');
-					}
-					else {
-						queryStringParams[name] = params[name];
-					}
-				}
-				for (name in queryStringParams) {
-					url += url.indexOf('?') === -1 ? '?' : '&';
-					url += encodeURIComponent(name);
-					if (queryStringParams[name] !== null && queryStringParams[name] !== undefined) {
-						url += '=';
-						url += encodeURIComponent(queryStringParams[name]);
-					}
-				}
-			}
-			return url;
-		}
-
-		function startsWith(str, test) {
-			return str.indexOf(test) === 0;
-		}
-
-		/**
-		 * Create a new URL Builder
-		 *
-		 * @param {string|UrlBuilder} template the base template to build from, may be another UrlBuilder
-		 * @param {Object} [params] base parameters
-		 * @constructor
-		 */
-		function UrlBuilder(template, params) {
-			if (!(this instanceof UrlBuilder)) {
-				// invoke as a constructor
-				return new UrlBuilder(template, params);
-			}
-
-			if (template instanceof UrlBuilder) {
-				this._template = template.template;
-				this._params = mixin({}, this._params, params);
-			}
-			else {
-				this._template = (template || '').toString();
-				this._params = params || {};
-			}
-		}
-
-		UrlBuilder.prototype = {
-
-			/**
-			 * Create a new UrlBuilder instance that extends the current builder.
-			 * The current builder is unmodified.
-			 *
-			 * @param {string} [template] URL template to append to the current template
-			 * @param {Object} [params] params to combine with current params.  New params override existing params
-			 * @return {UrlBuilder} the new builder
-			 */
-			append: function (template,  params) {
-				// TODO consider query strings and fragments
-				return new UrlBuilder(this._template + template, mixin({}, this._params, params));
-			},
-
-			/**
-			 * Create a new UrlBuilder with a fully qualified URL based on the
-			 * window's location or base href and the current templates relative URL.
-			 *
-			 * Path variables are preserved.
-			 *
-			 * *Browser only*
-			 *
-			 * @return {UrlBuilder} the fully qualified URL template
-			 */
-			fullyQualify: function () {
-				if (!location) { return this; }
-				if (this.isFullyQualified()) { return this; }
-
-				var template = this._template;
-
-				if (startsWith(template, '//')) {
-					template = origin.protocol + template;
-				}
-				else if (startsWith(template, '/')) {
-					template = origin.origin + template;
-				}
-				else if (!this.isAbsolute()) {
-					template = origin.origin + origin.pathname.substring(0, origin.pathname.lastIndexOf('/') + 1);
-				}
-
-				if (template.indexOf('/', 8) === -1) {
-					// default the pathname to '/'
-					template = template + '/';
-				}
-
-				return new UrlBuilder(template, this._params);
-			},
-
-			/**
-			 * True if the URL is absolute
-			 *
-			 * @return {boolean}
-			 */
-			isAbsolute: function () {
-				return absoluteUrlRE.test(this.build());
-			},
-
-			/**
-			 * True if the URL is fully qualified
-			 *
-			 * @return {boolean}
-			 */
-			isFullyQualified: function () {
-				return fullyQualifiedUrlRE.test(this.build());
-			},
-
-			/**
-			 * True if the URL is cross origin. The protocol, host and port must not be
-			 * the same in order to be cross origin,
-			 *
-			 * @return {boolean}
-			 */
-			isCrossOrigin: function () {
-				if (!origin) {
-					return true;
-				}
-				var url = this.parts();
-				return url.protocol !== origin.protocol ||
-				       url.hostname !== origin.hostname ||
-				       url.port !== origin.port;
-			},
-
-			/**
-			 * Split a URL into its consituent parts following the naming convention of
-			 * 'window.location'. One difference is that the port will contain the
-			 * protocol default if not specified.
-			 *
-			 * @see https://developer.mozilla.org/en-US/docs/DOM/window.location
-			 *
-			 * @returns {Object} a 'window.location'-like object
-			 */
-			parts: function () {
-				/*jshint maxcomplexity:20 */
-				var url, parts;
-				url = this.fullyQualify().build().match(urlRE);
-				parts = {
-					href: url[0],
-					protocol: url[1],
-					host: url[3] || '',
-					hostname: url[4] || '',
-					port: url[6],
-					pathname: url[7] || '',
-					search: url[8] || '',
-					hash: url[9] || ''
-				};
-				parts.origin = parts.protocol + '//' + parts.host;
-				parts.port = parts.port || (parts.protocol === 'https:' ? '443' : parts.protocol === 'http:' ? '80' : '');
-				return parts;
-			},
-
-			/**
-			 * Expand the template replacing path variables with parameters
-			 *
-			 * @param {Object} [params] params to combine with current params.  New params override existing params
-			 * @return {string} the expanded URL
-			 */
-			build: function (params) {
-				return buildUrl(this._template, mixin({}, this._params, params));
-			},
-
-			/**
-			 * @see build
-			 */
-			toString: function () {
-				return this.build();
-			}
-
-		};
-
-		origin = location ? new UrlBuilder(location.href).parts() : undef;
-
-		return UrlBuilder;
-	}).call(exports, __webpack_require__, exports, module),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-
-}(
-	__webpack_require__(/*! !webpack amd define */ "./node_modules/webpack/buildin/amd-define.js"),
-	typeof window !== 'undefined' ? window.location : void 0
-	// Boilerplate for AMD and Node
-));
-
-
-/***/ }),
-
-/***/ "./node_modules/rest/browser.js":
-/*!**************************************!*\
-  !*** ./node_modules/rest/browser.js ***!
-  \**************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-var __WEBPACK_AMD_DEFINE_RESULT__;/*
- * Copyright 2014 the original author or authors
- * @license MIT, see LICENSE.txt for details
- *
- * @author Scott Andrews
- */
-
-(function (define) {
-	'use strict';
-
-	!(__WEBPACK_AMD_DEFINE_RESULT__ = (function (require) {
-
-		var rest = __webpack_require__(/*! ./client/default */ "./node_modules/rest/client/default.js"),
-		    browser = __webpack_require__(/*! ./client/xhr */ "./node_modules/rest/client/xhr.js");
-
-		rest.setPlatformDefaultClient(browser);
-
-		return rest;
-
-	}).call(exports, __webpack_require__, exports, module),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-
-}(
-	__webpack_require__(/*! !webpack amd define */ "./node_modules/webpack/buildin/amd-define.js")
-	// Boilerplate for AMD and Node
-));
-
-
-/***/ }),
-
-/***/ "./node_modules/rest/client.js":
-/*!*************************************!*\
-  !*** ./node_modules/rest/client.js ***!
-  \*************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-var __WEBPACK_AMD_DEFINE_RESULT__;/*
- * Copyright 2014 the original author or authors
- * @license MIT, see LICENSE.txt for details
- *
- * @author Scott Andrews
- */
-
-(function (define) {
-	'use strict';
-
-	!(__WEBPACK_AMD_DEFINE_RESULT__ = (function (/* require */) {
-
-		/**
-		 * Add common helper methods to a client impl
-		 *
-		 * @param {function} impl the client implementation
-		 * @param {Client} [target] target of this client, used when wrapping other clients
-		 * @returns {Client} the client impl with additional methods
-		 */
-		return function client(impl, target) {
-
-			if (target) {
-
-				/**
-				 * @returns {Client} the target client
-				 */
-				impl.skip = function skip() {
-					return target;
-				};
-
-			}
-
-			/**
-			 * Allow a client to easily be wrapped by an interceptor
-			 *
-			 * @param {Interceptor} interceptor the interceptor to wrap this client with
-			 * @param [config] configuration for the interceptor
-			 * @returns {Client} the newly wrapped client
-			 */
-			impl.wrap = function wrap(interceptor, config) {
-				return interceptor(impl, config);
-			};
-
-			/**
-			 * @deprecated
-			 */
-			impl.chain = function chain() {
-				if (typeof console !== 'undefined') {
-					console.log('rest.js: client.chain() is deprecated, use client.wrap() instead');
-				}
-
-				return impl.wrap.apply(this, arguments);
-			};
-
-			return impl;
-
-		};
-
-	}).call(exports, __webpack_require__, exports, module),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-
-}(
-	__webpack_require__(/*! !webpack amd define */ "./node_modules/webpack/buildin/amd-define.js")
-	// Boilerplate for AMD and Node
-));
-
-
-/***/ }),
-
-/***/ "./node_modules/rest/client/default.js":
-/*!*********************************************!*\
-  !*** ./node_modules/rest/client/default.js ***!
-  \*********************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-var __WEBPACK_AMD_DEFINE_RESULT__;/*
- * Copyright 2014 the original author or authors
- * @license MIT, see LICENSE.txt for details
- *
- * @author Scott Andrews
- */
-
-(function (define) {
-	'use strict';
-
-	var undef;
-
-	!(__WEBPACK_AMD_DEFINE_RESULT__ = (function (require) {
-
-		/**
-		 * Plain JS Object containing properties that represent an HTTP request.
-		 *
-		 * Depending on the capabilities of the underlying client, a request
-		 * may be cancelable. If a request may be canceled, the client will add
-		 * a canceled flag and cancel function to the request object. Canceling
-		 * the request will put the response into an error state.
-		 *
-		 * @field {string} [method='GET'] HTTP method, commonly GET, POST, PUT, DELETE or HEAD
-		 * @field {string|UrlBuilder} [path=''] path template with optional path variables
-		 * @field {Object} [params] parameters for the path template and query string
-		 * @field {Object} [headers] custom HTTP headers to send, in addition to the clients default headers
-		 * @field [entity] the HTTP entity, common for POST or PUT requests
-		 * @field {boolean} [canceled] true if the request has been canceled, set by the client
-		 * @field {Function} [cancel] cancels the request if invoked, provided by the client
-		 * @field {Client} [originator] the client that first handled this request, provided by the interceptor
-		 *
-		 * @class Request
-		 */
-
-		/**
-		 * Plain JS Object containing properties that represent an HTTP response
-		 *
-		 * @field {Object} [request] the request object as received by the root client
-		 * @field {Object} [raw] the underlying request object, like XmlHttpRequest in a browser
-		 * @field {number} [status.code] status code of the response (i.e. 200, 404)
-		 * @field {string} [status.text] status phrase of the response
-		 * @field {Object] [headers] response headers hash of normalized name, value pairs
-		 * @field [entity] the response body
-		 *
-		 * @class Response
-		 */
-
-		/**
-		 * HTTP client particularly suited for RESTful operations.
-		 *
-		 * @field {function} wrap wraps this client with a new interceptor returning the wrapped client
-		 *
-		 * @param {Request} the HTTP request
-		 * @returns {ResponsePromise<Response>} a promise the resolves to the HTTP response
-		 *
-		 * @class Client
-		 */
-
-		 /**
-		  * Extended when.js Promises/A+ promise with HTTP specific helpers
-		  *q
-		  * @method entity promise for the HTTP entity
-		  * @method status promise for the HTTP status code
-		  * @method headers promise for the HTTP response headers
-		  * @method header promise for a specific HTTP response header
-		  *
-		  * @class ResponsePromise
-		  * @extends Promise
-		  */
-
-		var client, target, platformDefault;
-
-		client = __webpack_require__(/*! ../client */ "./node_modules/rest/client.js");
-
-		/**
-		 * Make a request with the default client
-		 * @param {Request} the HTTP request
-		 * @returns {Promise<Response>} a promise the resolves to the HTTP response
-		 */
-		function defaultClient() {
-			return target.apply(undef, arguments);
-		}
-
-		/**
-		 * Change the default client
-		 * @param {Client} client the new default client
-		 */
-		defaultClient.setDefaultClient = function setDefaultClient(client) {
-			target = client;
-		};
-
-		/**
-		 * Obtain a direct reference to the current default client
-		 * @returns {Client} the default client
-		 */
-		defaultClient.getDefaultClient = function getDefaultClient() {
-			return target;
-		};
-
-		/**
-		 * Reset the default client to the platform default
-		 */
-		defaultClient.resetDefaultClient = function resetDefaultClient() {
-			target = platformDefault;
-		};
-
-		/**
-		 * @private
-		 */
-		defaultClient.setPlatformDefaultClient = function setPlatformDefaultClient(client) {
-			if (platformDefault) {
-				throw new Error('Unable to redefine platformDefaultClient');
-			}
-			target = platformDefault = client;
-		};
-
-		return client(defaultClient);
-
-	}).call(exports, __webpack_require__, exports, module),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-
-}(
-	__webpack_require__(/*! !webpack amd define */ "./node_modules/webpack/buildin/amd-define.js")
-	// Boilerplate for AMD and Node
-));
-
-
-/***/ }),
-
-/***/ "./node_modules/rest/client/xhr.js":
-/*!*****************************************!*\
-  !*** ./node_modules/rest/client/xhr.js ***!
-  \*****************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-var __WEBPACK_AMD_DEFINE_RESULT__;/*
- * Copyright 2012-2014 the original author or authors
- * @license MIT, see LICENSE.txt for details
- *
- * @author Scott Andrews
- */
-
-(function (define, global) {
-	'use strict';
-
-	!(__WEBPACK_AMD_DEFINE_RESULT__ = (function (require) {
-
-		var when, UrlBuilder, normalizeHeaderName, responsePromise, client, headerSplitRE;
-
-		when = __webpack_require__(/*! when */ "./node_modules/when/when.js");
-		UrlBuilder = __webpack_require__(/*! ../UrlBuilder */ "./node_modules/rest/UrlBuilder.js");
-		normalizeHeaderName = __webpack_require__(/*! ../util/normalizeHeaderName */ "./node_modules/rest/util/normalizeHeaderName.js");
-		responsePromise = __webpack_require__(/*! ../util/responsePromise */ "./node_modules/rest/util/responsePromise.js");
-		client = __webpack_require__(/*! ../client */ "./node_modules/rest/client.js");
-
-		// according to the spec, the line break is '\r\n', but doesn't hold true in practice
-		headerSplitRE = /[\r|\n]+/;
-
-		function parseHeaders(raw) {
-			// Note: Set-Cookie will be removed by the browser
-			var headers = {};
-
-			if (!raw) { return headers; }
-
-			raw.trim().split(headerSplitRE).forEach(function (header) {
-				var boundary, name, value;
-				boundary = header.indexOf(':');
-				name = normalizeHeaderName(header.substring(0, boundary).trim());
-				value = header.substring(boundary + 1).trim();
-				if (headers[name]) {
-					if (Array.isArray(headers[name])) {
-						// add to an existing array
-						headers[name].push(value);
-					}
-					else {
-						// convert single value to array
-						headers[name] = [headers[name], value];
-					}
-				}
-				else {
-					// new, single value
-					headers[name] = value;
-				}
-			});
-
-			return headers;
-		}
-
-		function safeMixin(target, source) {
-			Object.keys(source || {}).forEach(function (prop) {
-				// make sure the property already exists as
-				// IE 6 will blow up if we add a new prop
-				if (source.hasOwnProperty(prop) && prop in target) {
-					try {
-						target[prop] = source[prop];
-					}
-					catch (e) {
-						// ignore, expected for some properties at some points in the request lifecycle
-					}
-				}
-			});
-
-			return target;
-		}
-
-		return client(function xhr(request) {
-			return responsePromise.promise(function (resolve, reject) {
-				/*jshint maxcomplexity:20 */
-
-				var client, method, url, headers, entity, headerName, response, XMLHttpRequest;
-
-				request = typeof request === 'string' ? { path: request } : request || {};
-				response = { request: request };
-
-				if (request.canceled) {
-					response.error = 'precanceled';
-					reject(response);
-					return;
-				}
-
-				entity = request.entity;
-				request.method = request.method || (entity ? 'POST' : 'GET');
-				method = request.method;
-				url = response.url = new UrlBuilder(request.path || '', request.params).build();
-
-				XMLHttpRequest = request.engine || global.XMLHttpRequest;
-				if (!XMLHttpRequest) {
-					reject({ request: request, url: url, error: 'xhr-not-available' });
-					return;
-				}
-
-				try {
-					client = response.raw = new XMLHttpRequest();
-
-					// mixin extra request properties before and after opening the request as some properties require being set at different phases of the request
-					safeMixin(client, request.mixin);
-					client.open(method, url, true);
-					safeMixin(client, request.mixin);
-
-					headers = request.headers;
-					for (headerName in headers) {
-						/*jshint forin:false */
-						if (headerName === 'Content-Type' && headers[headerName] === 'multipart/form-data') {
-							// XMLHttpRequest generates its own Content-Type header with the
-							// appropriate multipart boundary when sending multipart/form-data.
-							continue;
-						}
-
-						client.setRequestHeader(headerName, headers[headerName]);
-					}
-
-					request.canceled = false;
-					request.cancel = function cancel() {
-						request.canceled = true;
-						client.abort();
-						reject(response);
-					};
-
-					client.onreadystatechange = function (/* e */) {
-						if (request.canceled) { return; }
-						if (client.readyState === (XMLHttpRequest.DONE || 4)) {
-							response.status = {
-								code: client.status,
-								text: client.statusText
-							};
-							response.headers = parseHeaders(client.getAllResponseHeaders());
-							response.entity = client.responseText;
-
-							if (response.status.code > 0) {
-								// check status code as readystatechange fires before error event
-								resolve(response);
-							}
-							else {
-								// give the error callback a chance to fire before resolving
-								// requests for file:// URLs do not have a status code
-								setTimeout(function () {
-									resolve(response);
-								}, 0);
-							}
-						}
-					};
-
-					try {
-						client.onerror = function (/* e */) {
-							response.error = 'loaderror';
-							reject(response);
-						};
-					}
-					catch (e) {
-						// IE 6 will not support error handling
-					}
-
-					client.send(entity);
-				}
-				catch (e) {
-					response.error = 'loaderror';
-					reject(response);
-				}
-
-			});
-		});
-
-	}).call(exports, __webpack_require__, exports, module),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-
-}(
-	__webpack_require__(/*! !webpack amd define */ "./node_modules/webpack/buildin/amd-define.js"),
-	typeof window !== 'undefined' ? window : void 0
-	// Boilerplate for AMD and Node
-));
-
-
-/***/ }),
-
-/***/ "./node_modules/rest/interceptor.js":
-/*!******************************************!*\
-  !*** ./node_modules/rest/interceptor.js ***!
-  \******************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-var __WEBPACK_AMD_DEFINE_RESULT__;/*
- * Copyright 2012-2015 the original author or authors
- * @license MIT, see LICENSE.txt for details
- *
- * @author Scott Andrews
- */
-
-(function (define) {
-	'use strict';
-
-	!(__WEBPACK_AMD_DEFINE_RESULT__ = (function (require) {
-
-		var defaultClient, mixin, responsePromise, client, when;
-
-		defaultClient = __webpack_require__(/*! ./client/default */ "./node_modules/rest/client/default.js");
-		mixin = __webpack_require__(/*! ./util/mixin */ "./node_modules/rest/util/mixin.js");
-		responsePromise = __webpack_require__(/*! ./util/responsePromise */ "./node_modules/rest/util/responsePromise.js");
-		client = __webpack_require__(/*! ./client */ "./node_modules/rest/client.js");
-		when = __webpack_require__(/*! when */ "./node_modules/when/when.js");
-
-		/**
-		 * Interceptors have the ability to intercept the request and/org response
-		 * objects.  They may augment, prune, transform or replace the
-		 * request/response as needed.  Clients may be composed by wrapping
-		 * together multiple interceptors.
-		 *
-		 * Configured interceptors are functional in nature.  Wrapping a client in
-		 * an interceptor will not affect the client, merely the data that flows in
-		 * and out of that client.  A common configuration can be created once and
-		 * shared; specialization can be created by further wrapping that client
-		 * with custom interceptors.
-		 *
-		 * @param {Client} [target] client to wrap
-		 * @param {Object} [config] configuration for the interceptor, properties will be specific to the interceptor implementation
-		 * @returns {Client} A client wrapped with the interceptor
-		 *
-		 * @class Interceptor
-		 */
-
-		function defaultInitHandler(config) {
-			return config;
-		}
-
-		function defaultRequestHandler(request /*, config, meta */) {
-			return request;
-		}
-
-		function defaultResponseHandler(response /*, config, meta */) {
-			return response;
-		}
-
-		function race(promisesOrValues) {
-			// this function is different than when.any as the first to reject also wins
-			return when.promise(function (resolve, reject) {
-				promisesOrValues.forEach(function (promiseOrValue) {
-					when(promiseOrValue, resolve, reject);
-				});
-			});
-		}
-
-		/**
-		 * Alternate return type for the request handler that allows for more complex interactions.
-		 *
-		 * @param properties.request the traditional request return object
-		 * @param {Promise} [properties.abort] promise that resolves if/when the request is aborted
-		 * @param {Client} [properties.client] override the defined client with an alternate client
-		 * @param [properties.response] response for the request, short circuit the request
-		 */
-		function ComplexRequest(properties) {
-			if (!(this instanceof ComplexRequest)) {
-				// in case users forget the 'new' don't mix into the interceptor
-				return new ComplexRequest(properties);
-			}
-			mixin(this, properties);
-		}
-
-		/**
-		 * Create a new interceptor for the provided handlers.
-		 *
-		 * @param {Function} [handlers.init] one time intialization, must return the config object
-		 * @param {Function} [handlers.request] request handler
-		 * @param {Function} [handlers.response] response handler regardless of error state
-		 * @param {Function} [handlers.success] response handler when the request is not in error
-		 * @param {Function} [handlers.error] response handler when the request is in error, may be used to 'unreject' an error state
-		 * @param {Function} [handlers.client] the client to use if otherwise not specified, defaults to platform default client
-		 *
-		 * @returns {Interceptor}
-		 */
-		function interceptor(handlers) {
-
-			var initHandler, requestHandler, successResponseHandler, errorResponseHandler;
-
-			handlers = handlers || {};
-
-			initHandler            = handlers.init    || defaultInitHandler;
-			requestHandler         = handlers.request || defaultRequestHandler;
-			successResponseHandler = handlers.success || handlers.response || defaultResponseHandler;
-			errorResponseHandler   = handlers.error   || function () {
-				// Propagate the rejection, with the result of the handler
-				return when((handlers.response || defaultResponseHandler).apply(this, arguments), when.reject, when.reject);
-			};
-
-			return function (target, config) {
-
-				if (typeof target === 'object') {
-					config = target;
-				}
-				if (typeof target !== 'function') {
-					target = handlers.client || defaultClient;
-				}
-
-				config = initHandler(config || {});
-
-				function interceptedClient(request) {
-					var context, meta;
-					context = {};
-					meta = { 'arguments': Array.prototype.slice.call(arguments), client: interceptedClient };
-					request = typeof request === 'string' ? { path: request } : request || {};
-					request.originator = request.originator || interceptedClient;
-					return responsePromise(
-						requestHandler.call(context, request, config, meta),
-						function (request) {
-							var response, abort, next;
-							next = target;
-							if (request instanceof ComplexRequest) {
-								// unpack request
-								abort = request.abort;
-								next = request.client || next;
-								response = request.response;
-								// normalize request, must be last
-								request = request.request;
-							}
-							response = response || when(request, function (request) {
-								return when(
-									next(request),
-									function (response) {
-										return successResponseHandler.call(context, response, config, meta);
-									},
-									function (response) {
-										return errorResponseHandler.call(context, response, config, meta);
-									}
-								);
-							});
-							return abort ? race([response, abort]) : response;
-						},
-						function (error) {
-							return when.reject({ request: request, error: error });
-						}
-					);
-				}
-
-				return client(interceptedClient, target);
-			};
-		}
-
-		interceptor.ComplexRequest = ComplexRequest;
-
-		return interceptor;
-
-	}).call(exports, __webpack_require__, exports, module),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-
-}(
-	__webpack_require__(/*! !webpack amd define */ "./node_modules/webpack/buildin/amd-define.js")
-	// Boilerplate for AMD and Node
-));
-
-
-/***/ }),
-
-/***/ "./node_modules/rest/interceptor/defaultRequest.js":
-/*!*********************************************************!*\
-  !*** ./node_modules/rest/interceptor/defaultRequest.js ***!
-  \*********************************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-var __WEBPACK_AMD_DEFINE_RESULT__;/*
- * Copyright 2013 the original author or authors
- * @license MIT, see LICENSE.txt for details
- *
- * @author Scott Andrews
- */
-
-(function (define) {
-	'use strict';
-
-	!(__WEBPACK_AMD_DEFINE_RESULT__ = (function (require) {
-
-		var interceptor, mixinUtil, defaulter;
-
-		interceptor = __webpack_require__(/*! ../interceptor */ "./node_modules/rest/interceptor.js");
-		mixinUtil = __webpack_require__(/*! ../util/mixin */ "./node_modules/rest/util/mixin.js");
-
-		defaulter = (function () {
-
-			function mixin(prop, target, defaults) {
-				if (prop in target || prop in defaults) {
-					target[prop] = mixinUtil({}, defaults[prop], target[prop]);
-				}
-			}
-
-			function copy(prop, target, defaults) {
-				if (prop in defaults && !(prop in target)) {
-					target[prop] = defaults[prop];
-				}
-			}
-
-			var mappings = {
-				method: copy,
-				path: copy,
-				params: mixin,
-				headers: mixin,
-				entity: copy,
-				mixin: mixin
-			};
-
-			return function (target, defaults) {
-				for (var prop in mappings) {
-					/*jshint forin: false */
-					mappings[prop](prop, target, defaults);
-				}
-				return target;
-			};
-
-		}());
-
-		/**
-		 * Provide default values for a request. These values will be applied to the
-		 * request if the request object does not already contain an explicit value.
-		 *
-		 * For 'params', 'headers', and 'mixin', individual values are mixed in with the
-		 * request's values. The result is a new object representiing the combined
-		 * request and config values. Neither input object is mutated.
-		 *
-		 * @param {Client} [client] client to wrap
-		 * @param {string} [config.method] the default method
-		 * @param {string} [config.path] the default path
-		 * @param {Object} [config.params] the default params, mixed with the request's existing params
-		 * @param {Object} [config.headers] the default headers, mixed with the request's existing headers
-		 * @param {Object} [config.mixin] the default "mixins" (http/https options), mixed with the request's existing "mixins"
-		 *
-		 * @returns {Client}
-		 */
-		return interceptor({
-			request: function handleRequest(request, config) {
-				return defaulter(request, config);
-			}
-		});
-
-	}).call(exports, __webpack_require__, exports, module),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-
-}(
-	__webpack_require__(/*! !webpack amd define */ "./node_modules/webpack/buildin/amd-define.js")
-	// Boilerplate for AMD and Node
-));
-
-
-/***/ }),
-
-/***/ "./node_modules/rest/interceptor/errorCode.js":
-/*!****************************************************!*\
-  !*** ./node_modules/rest/interceptor/errorCode.js ***!
-  \****************************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-var __WEBPACK_AMD_DEFINE_RESULT__;/*
- * Copyright 2012-2013 the original author or authors
- * @license MIT, see LICENSE.txt for details
- *
- * @author Scott Andrews
- */
-
-(function (define) {
-	'use strict';
-
-	!(__WEBPACK_AMD_DEFINE_RESULT__ = (function (require) {
-
-		var interceptor, when;
-
-		interceptor = __webpack_require__(/*! ../interceptor */ "./node_modules/rest/interceptor.js");
-		when = __webpack_require__(/*! when */ "./node_modules/when/when.js");
-
-		/**
-		 * Rejects the response promise based on the status code.
-		 *
-		 * Codes greater than or equal to the provided value are rejected.  Default
-		 * value 400.
-		 *
-		 * @param {Client} [client] client to wrap
-		 * @param {number} [config.code=400] code to indicate a rejection
-		 *
-		 * @returns {Client}
-		 */
-		return interceptor({
-			init: function (config) {
-				config.code = config.code || 400;
-				return config;
-			},
-			response: function (response, config) {
-				if (response.status && response.status.code >= config.code) {
-					return when.reject(response);
-				}
-				return response;
-			}
-		});
-
-	}).call(exports, __webpack_require__, exports, module),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-
-}(
-	__webpack_require__(/*! !webpack amd define */ "./node_modules/webpack/buildin/amd-define.js")
-	// Boilerplate for AMD and Node
-));
-
-
-/***/ }),
-
-/***/ "./node_modules/rest/interceptor/mime.js":
-/*!***********************************************!*\
-  !*** ./node_modules/rest/interceptor/mime.js ***!
-  \***********************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-var __WEBPACK_AMD_DEFINE_RESULT__;/*
- * Copyright 2012-2014 the original author or authors
- * @license MIT, see LICENSE.txt for details
- *
- * @author Scott Andrews
- */
-
-(function (define) {
-	'use strict';
-
-	!(__WEBPACK_AMD_DEFINE_RESULT__ = (function (require) {
-
-		var interceptor, mime, registry, noopConverter, when;
-
-		interceptor = __webpack_require__(/*! ../interceptor */ "./node_modules/rest/interceptor.js");
-		mime = __webpack_require__(/*! ../mime */ "./node_modules/rest/mime.js");
-		registry = __webpack_require__(/*! ../mime/registry */ "./node_modules/rest/mime/registry.js");
-		when = __webpack_require__(/*! when */ "./node_modules/when/when.js");
-
-		noopConverter = {
-			read: function (obj) { return obj; },
-			write: function (obj) { return obj; }
-		};
-
-		/**
-		 * MIME type support for request and response entities.  Entities are
-		 * (de)serialized using the converter for the MIME type.
-		 *
-		 * Request entities are converted using the desired converter and the
-		 * 'Accept' request header prefers this MIME.
-		 *
-		 * Response entities are converted based on the Content-Type response header.
-		 *
-		 * @param {Client} [client] client to wrap
-		 * @param {string} [config.mime='text/plain'] MIME type to encode the request
-		 *   entity
-		 * @param {string} [config.accept] Accept header for the request
-		 * @param {Client} [config.client=<request.originator>] client passed to the
-		 *   converter, defaults to the client originating the request
-		 * @param {Registry} [config.registry] MIME registry, defaults to the root
-		 *   registry
-		 * @param {boolean} [config.permissive] Allow an unkown request MIME type
-		 *
-		 * @returns {Client}
-		 */
-		return interceptor({
-			init: function (config) {
-				config.registry = config.registry || registry;
-				return config;
-			},
-			request: function (request, config) {
-				var type, headers;
-
-				headers = request.headers || (request.headers = {});
-				type = mime.parse(headers['Content-Type'] = headers['Content-Type'] || config.mime || 'text/plain');
-				headers.Accept = headers.Accept || config.accept || type.raw + ', application/json;q=0.8, text/plain;q=0.5, */*;q=0.2';
-
-				if (!('entity' in request)) {
-					return request;
-				}
-
-				return config.registry.lookup(type).otherwise(function () {
-					// failed to resolve converter
-					if (config.permissive) {
-						return noopConverter;
-					}
-					throw 'mime-unknown';
-				}).then(function (converter) {
-					var client = config.client || request.originator;
-
-					return when.attempt(converter.write, request.entity, { client: client, request: request, mime: type, registry: config.registry })
-						.otherwise(function() {
-							throw 'mime-serialization';
-						})
-						.then(function(entity) {
-							request.entity = entity;
-							return request;
-						});
-				});
-			},
-			response: function (response, config) {
-				if (!(response.headers && response.headers['Content-Type'] && response.entity)) {
-					return response;
-				}
-
-				var type = mime.parse(response.headers['Content-Type']);
-
-				return config.registry.lookup(type).otherwise(function () { return noopConverter; }).then(function (converter) {
-					var client = config.client || response.request && response.request.originator;
-
-					return when.attempt(converter.read, response.entity, { client: client, response: response, mime: type, registry: config.registry })
-						.otherwise(function (e) {
-							response.error = 'mime-deserialization';
-							response.cause = e;
-							throw response;
-						})
-						.then(function (entity) {
-							response.entity = entity;
-							return response;
-						});
-				});
-			}
-		});
-
-	}).call(exports, __webpack_require__, exports, module),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-
-}(
-	__webpack_require__(/*! !webpack amd define */ "./node_modules/webpack/buildin/amd-define.js")
-	// Boilerplate for AMD and Node
-));
-
-
-/***/ }),
-
-/***/ "./node_modules/rest/interceptor/pathPrefix.js":
-/*!*****************************************************!*\
-  !*** ./node_modules/rest/interceptor/pathPrefix.js ***!
-  \*****************************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-var __WEBPACK_AMD_DEFINE_RESULT__;/*
- * Copyright 2012-2013 the original author or authors
- * @license MIT, see LICENSE.txt for details
- *
- * @author Scott Andrews
- */
-
-(function (define) {
-	'use strict';
-
-	!(__WEBPACK_AMD_DEFINE_RESULT__ = (function (require) {
-
-		var interceptor, UrlBuilder;
-
-		interceptor = __webpack_require__(/*! ../interceptor */ "./node_modules/rest/interceptor.js");
-		UrlBuilder = __webpack_require__(/*! ../UrlBuilder */ "./node_modules/rest/UrlBuilder.js");
-
-		function startsWith(str, prefix) {
-			return str.indexOf(prefix) === 0;
-		}
-
-		function endsWith(str, suffix) {
-			return str.lastIndexOf(suffix) + suffix.length === str.length;
-		}
-
-		/**
-		 * Prefixes the request path with a common value.
-		 *
-		 * @param {Client} [client] client to wrap
-		 * @param {number} [config.prefix] path prefix
-		 *
-		 * @returns {Client}
-		 */
-		return interceptor({
-			request: function (request, config) {
-				var path;
-
-				if (config.prefix && !(new UrlBuilder(request.path).isFullyQualified())) {
-					path = config.prefix;
-					if (request.path) {
-						if (!endsWith(path, '/') && !startsWith(request.path, '/')) {
-							// add missing '/' between path sections
-							path += '/';
-						}
-						path += request.path;
-					}
-					request.path = path;
-				}
-
-				return request;
-			}
-		});
-
-	}).call(exports, __webpack_require__, exports, module),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-
-}(
-	__webpack_require__(/*! !webpack amd define */ "./node_modules/webpack/buildin/amd-define.js")
-	// Boilerplate for AMD and Node
-));
-
-
-/***/ }),
-
-/***/ "./node_modules/rest/interceptor/template.js":
-/*!***************************************************!*\
-  !*** ./node_modules/rest/interceptor/template.js ***!
-  \***************************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-var __WEBPACK_AMD_DEFINE_RESULT__;/*
- * Copyright 2015 the original author or authors
- * @license MIT, see LICENSE.txt for details
- *
- * @author Scott Andrews
- */
-
-(function (define) {
-	'use strict';
-
-	!(__WEBPACK_AMD_DEFINE_RESULT__ = (function (require) {
-
-		var interceptor, uriTemplate, mixin;
-
-		interceptor = __webpack_require__(/*! ../interceptor */ "./node_modules/rest/interceptor.js");
-		uriTemplate = __webpack_require__(/*! ../util/uriTemplate */ "./node_modules/rest/util/uriTemplate.js");
-		mixin = __webpack_require__(/*! ../util/mixin */ "./node_modules/rest/util/mixin.js");
-
-		/**
-		 * Applies request params to the path as a URI Template
-		 *
-		 * Params are removed from the request object, as they have been consumed.
-		 *
-		 * @see https://tools.ietf.org/html/rfc6570
-		 *
-		 * @param {Client} [client] client to wrap
-		 * @param {Object} [config.params] default param values
-		 * @param {string} [config.template] default template
-		 *
-		 * @returns {Client}
-		 */
-		return interceptor({
-			init: function (config) {
-				config.params = config.params || {};
-				config.template = config.template || '';
-				return config;
-			},
-			request: function (request, config) {
-				var template, params;
-
-				template = request.path || config.template;
-				params = mixin({}, request.params, config.params);
-
-				request.path = uriTemplate.expand(template, params);
-				delete request.params;
-
-				return request;
-			}
-		});
-
-	}).call(exports, __webpack_require__, exports, module),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-
-}(
-	__webpack_require__(/*! !webpack amd define */ "./node_modules/webpack/buildin/amd-define.js")
-	// Boilerplate for AMD and Node
-));
-
-
-/***/ }),
-
-/***/ "./node_modules/rest/mime.js":
-/*!***********************************!*\
-  !*** ./node_modules/rest/mime.js ***!
-  \***********************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-var __WEBPACK_AMD_DEFINE_RESULT__;/*
-* Copyright 2014 the original author or authors
-* @license MIT, see LICENSE.txt for details
-*
-* @author Scott Andrews
-*/
-
-(function (define) {
-	'use strict';
-
-	var undef;
-
-	!(__WEBPACK_AMD_DEFINE_RESULT__ = (function (/* require */) {
-
-		/**
-		 * Parse a MIME type into it's constituent parts
-		 *
-		 * @param {string} mime MIME type to parse
-		 * @return {{
-		 *   {string} raw the original MIME type
-		 *   {string} type the type and subtype
-		 *   {string} [suffix] mime suffix, including the plus, if any
-		 *   {Object} params key/value pair of attributes
-		 * }}
-		 */
-		function parse(mime) {
-			var params, type;
-
-			params = mime.split(';');
-			type = params[0].trim().split('+');
-
-			return {
-				raw: mime,
-				type: type[0],
-				suffix: type[1] ? '+' + type[1] : '',
-				params: params.slice(1).reduce(function (params, pair) {
-					pair = pair.split('=');
-					params[pair[0].trim()] = pair[1] ? pair[1].trim() : undef;
-					return params;
-				}, {})
-			};
-		}
-
-		return {
-			parse: parse
-		};
-
-	}).call(exports, __webpack_require__, exports, module),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-
-}(
-	__webpack_require__(/*! !webpack amd define */ "./node_modules/webpack/buildin/amd-define.js")
-	// Boilerplate for AMD and Node
-));
-
-
-/***/ }),
-
-/***/ "./node_modules/rest/mime/registry.js":
-/*!********************************************!*\
-  !*** ./node_modules/rest/mime/registry.js ***!
-  \********************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-var __WEBPACK_AMD_DEFINE_RESULT__;/*
- * Copyright 2012-2014 the original author or authors
- * @license MIT, see LICENSE.txt for details
- *
- * @author Scott Andrews
- */
-
-(function (define) {
-	'use strict';
-
-	!(__WEBPACK_AMD_DEFINE_RESULT__ = (function (require) {
-
-		var mime, when, registry;
-
-		mime = __webpack_require__(/*! ../mime */ "./node_modules/rest/mime.js");
-		when = __webpack_require__(/*! when */ "./node_modules/when/when.js");
-
-		function Registry(mimes) {
-
-			/**
-			 * Lookup the converter for a MIME type
-			 *
-			 * @param {string} type the MIME type
-			 * @return a promise for the converter
-			 */
-			this.lookup = function lookup(type) {
-				var parsed;
-
-				parsed = typeof type === 'string' ? mime.parse(type) : type;
-
-				if (mimes[parsed.raw]) {
-					return mimes[parsed.raw];
-				}
-				if (mimes[parsed.type + parsed.suffix]) {
-					return mimes[parsed.type + parsed.suffix];
-				}
-				if (mimes[parsed.type]) {
-					return mimes[parsed.type];
-				}
-				if (mimes[parsed.suffix]) {
-					return mimes[parsed.suffix];
-				}
-
-				return when.reject(new Error('Unable to locate converter for mime "' + parsed.raw + '"'));
-			};
-
-			/**
-			 * Create a late dispatched proxy to the target converter.
-			 *
-			 * Common when a converter is registered under multiple names and
-			 * should be kept in sync if updated.
-			 *
-			 * @param {string} type mime converter to dispatch to
-			 * @returns converter whose read/write methods target the desired mime converter
-			 */
-			this.delegate = function delegate(type) {
-				return {
-					read: function () {
-						var args = arguments;
-						return this.lookup(type).then(function (converter) {
-							return converter.read.apply(this, args);
-						}.bind(this));
-					}.bind(this),
-					write: function () {
-						var args = arguments;
-						return this.lookup(type).then(function (converter) {
-							return converter.write.apply(this, args);
-						}.bind(this));
-					}.bind(this)
-				};
-			};
-
-			/**
-			 * Register a custom converter for a MIME type
-			 *
-			 * @param {string} type the MIME type
-			 * @param converter the converter for the MIME type
-			 * @return a promise for the converter
-			 */
-			this.register = function register(type, converter) {
-				mimes[type] = when(converter);
-				return mimes[type];
-			};
-
-			/**
-			 * Create a child registry whoes registered converters remain local, while
-			 * able to lookup converters from its parent.
-			 *
-			 * @returns child MIME registry
-			 */
-			this.child = function child() {
-				return new Registry(Object.create(mimes));
-			};
-
-		}
-
-		registry = new Registry({});
-
-		// include provided serializers
-		registry.register('application/hal', __webpack_require__(/*! ./type/application/hal */ "./node_modules/rest/mime/type/application/hal.js"));
-		registry.register('application/json', __webpack_require__(/*! ./type/application/json */ "./node_modules/rest/mime/type/application/json.js"));
-		registry.register('application/x-www-form-urlencoded', __webpack_require__(/*! ./type/application/x-www-form-urlencoded */ "./node_modules/rest/mime/type/application/x-www-form-urlencoded.js"));
-		registry.register('multipart/form-data', __webpack_require__(/*! ./type/multipart/form-data */ "./node_modules/rest/mime/type/multipart/form-data.js"));
-		registry.register('text/plain', __webpack_require__(/*! ./type/text/plain */ "./node_modules/rest/mime/type/text/plain.js"));
-
-		registry.register('+json', registry.delegate('application/json'));
-
-		return registry;
-
-	}).call(exports, __webpack_require__, exports, module),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-
-}(
-	__webpack_require__(/*! !webpack amd define */ "./node_modules/webpack/buildin/amd-define.js")
-	// Boilerplate for AMD and Node
-));
-
-
-/***/ }),
-
-/***/ "./node_modules/rest/mime/type/application/hal.js":
-/*!********************************************************!*\
-  !*** ./node_modules/rest/mime/type/application/hal.js ***!
-  \********************************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-var __WEBPACK_AMD_DEFINE_RESULT__;/*
- * Copyright 2013-2015 the original author or authors
- * @license MIT, see LICENSE.txt for details
- *
- * @author Scott Andrews
- */
-
-(function (define) {
-	'use strict';
-
-	!(__WEBPACK_AMD_DEFINE_RESULT__ = (function (require) {
-
-		var pathPrefix, template, find, lazyPromise, responsePromise, when;
-
-		pathPrefix = __webpack_require__(/*! ../../../interceptor/pathPrefix */ "./node_modules/rest/interceptor/pathPrefix.js");
-		template = __webpack_require__(/*! ../../../interceptor/template */ "./node_modules/rest/interceptor/template.js");
-		find = __webpack_require__(/*! ../../../util/find */ "./node_modules/rest/util/find.js");
-		lazyPromise = __webpack_require__(/*! ../../../util/lazyPromise */ "./node_modules/rest/util/lazyPromise.js");
-		responsePromise = __webpack_require__(/*! ../../../util/responsePromise */ "./node_modules/rest/util/responsePromise.js");
-		when = __webpack_require__(/*! when */ "./node_modules/when/when.js");
-
-		function defineProperty(obj, name, value) {
-			Object.defineProperty(obj, name, {
-				value: value,
-				configurable: true,
-				enumerable: false,
-				writeable: true
-			});
-		}
-
-		/**
-		 * Hypertext Application Language serializer
-		 *
-		 * Implemented to https://tools.ietf.org/html/draft-kelly-json-hal-06
-		 *
-		 * As the spec is still a draft, this implementation will be updated as the
-		 * spec evolves
-		 *
-		 * Objects are read as HAL indexing links and embedded objects on to the
-		 * resource. Objects are written as plain JSON.
-		 *
-		 * Embedded relationships are indexed onto the resource by the relationship
-		 * as a promise for the related resource.
-		 *
-		 * Links are indexed onto the resource as a lazy promise that will GET the
-		 * resource when a handler is first registered on the promise.
-		 *
-		 * A `requestFor` method is added to the entity to make a request for the
-		 * relationship.
-		 *
-		 * A `clientFor` method is added to the entity to get a full Client for a
-		 * relationship.
-		 *
-		 * The `_links` and `_embedded` properties on the resource are made
-		 * non-enumerable.
-		 */
-		return {
-
-			read: function (str, opts) {
-				var client, console;
-
-				opts = opts || {};
-				client = opts.client;
-				console = opts.console || console;
-
-				function deprecationWarning(relationship, deprecation) {
-					if (deprecation && console && console.warn || console.log) {
-						(console.warn || console.log).call(console, 'Relationship \'' + relationship + '\' is deprecated, see ' + deprecation);
-					}
-				}
-
-				return opts.registry.lookup(opts.mime.suffix).then(function (converter) {
-					return when(converter.read(str, opts)).then(function (root) {
-
-						find.findProperties(root, '_embedded', function (embedded, resource, name) {
-							Object.keys(embedded).forEach(function (relationship) {
-								if (relationship in resource) { return; }
-								var related = responsePromise({
-									entity: embedded[relationship]
-								});
-								defineProperty(resource, relationship, related);
-							});
-							defineProperty(resource, name, embedded);
-						});
-						find.findProperties(root, '_links', function (links, resource, name) {
-							Object.keys(links).forEach(function (relationship) {
-								var link = links[relationship];
-								if (relationship in resource) { return; }
-								defineProperty(resource, relationship, responsePromise.make(lazyPromise(function () {
-									if (link.deprecation) { deprecationWarning(relationship, link.deprecation); }
-									if (link.templated === true) {
-										return template(client)({ path: link.href });
-									}
-									return client({ path: link.href });
-								})));
-							});
-							defineProperty(resource, name, links);
-							defineProperty(resource, 'clientFor', function (relationship, clientOverride) {
-								var link = links[relationship];
-								if (!link) {
-									throw new Error('Unknown relationship: ' + relationship);
-								}
-								if (link.deprecation) { deprecationWarning(relationship, link.deprecation); }
-								if (link.templated === true) {
-									return template(
-										clientOverride || client,
-										{ template: link.href }
-									);
-								}
-								return pathPrefix(
-									clientOverride || client,
-									{ prefix: link.href }
-								);
-							});
-							defineProperty(resource, 'requestFor', function (relationship, request, clientOverride) {
-								var client = this.clientFor(relationship, clientOverride);
-								return client(request);
-							});
-						});
-
-						return root;
-					});
-				});
-
-			},
-
-			write: function (obj, opts) {
-				return opts.registry.lookup(opts.mime.suffix).then(function (converter) {
-					return converter.write(obj, opts);
-				});
-			}
-
-		};
-	}).call(exports, __webpack_require__, exports, module),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-
-}(
-	__webpack_require__(/*! !webpack amd define */ "./node_modules/webpack/buildin/amd-define.js")
-	// Boilerplate for AMD and Node
-));
-
-
-/***/ }),
-
-/***/ "./node_modules/rest/mime/type/application/json.js":
-/*!*********************************************************!*\
-  !*** ./node_modules/rest/mime/type/application/json.js ***!
-  \*********************************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-var __WEBPACK_AMD_DEFINE_RESULT__;/*
- * Copyright 2012-2015 the original author or authors
- * @license MIT, see LICENSE.txt for details
- *
- * @author Scott Andrews
- */
-
-(function (define) {
-	'use strict';
-
-	!(__WEBPACK_AMD_DEFINE_RESULT__ = (function (/* require */) {
-
-		/**
-		 * Create a new JSON converter with custom reviver/replacer.
-		 *
-		 * The extended converter must be published to a MIME registry in order
-		 * to be used. The existing converter will not be modified.
-		 *
-		 * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/JSON
-		 *
-		 * @param {function} [reviver=undefined] custom JSON.parse reviver
-		 * @param {function|Array} [replacer=undefined] custom JSON.stringify replacer
-		 */
-		function createConverter(reviver, replacer) {
-			return {
-
-				read: function (str) {
-					return JSON.parse(str, reviver);
-				},
-
-				write: function (obj) {
-					return JSON.stringify(obj, replacer);
-				},
-
-				extend: createConverter
-
-			};
-		}
-
-		return createConverter();
-
-	}).call(exports, __webpack_require__, exports, module),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-
-}(
-	__webpack_require__(/*! !webpack amd define */ "./node_modules/webpack/buildin/amd-define.js")
-	// Boilerplate for AMD and Node
-));
-
-
-/***/ }),
-
-/***/ "./node_modules/rest/mime/type/application/x-www-form-urlencoded.js":
-/*!**************************************************************************!*\
-  !*** ./node_modules/rest/mime/type/application/x-www-form-urlencoded.js ***!
-  \**************************************************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-var __WEBPACK_AMD_DEFINE_RESULT__;/*
- * Copyright 2012 the original author or authors
- * @license MIT, see LICENSE.txt for details
- *
- * @author Scott Andrews
- */
-
-(function (define) {
-	'use strict';
-
-	!(__WEBPACK_AMD_DEFINE_RESULT__ = (function (/* require */) {
-
-		var encodedSpaceRE, urlEncodedSpaceRE;
-
-		encodedSpaceRE = /%20/g;
-		urlEncodedSpaceRE = /\+/g;
-
-		function urlEncode(str) {
-			str = encodeURIComponent(str);
-			// spec says space should be encoded as '+'
-			return str.replace(encodedSpaceRE, '+');
-		}
-
-		function urlDecode(str) {
-			// spec says space should be encoded as '+'
-			str = str.replace(urlEncodedSpaceRE, ' ');
-			return decodeURIComponent(str);
-		}
-
-		function append(str, name, value) {
-			if (Array.isArray(value)) {
-				value.forEach(function (value) {
-					str = append(str, name, value);
-				});
-			}
-			else {
-				if (str.length > 0) {
-					str += '&';
-				}
-				str += urlEncode(name);
-				if (value !== undefined && value !== null) {
-					str += '=' + urlEncode(value);
-				}
-			}
-			return str;
-		}
-
-		return {
-
-			read: function (str) {
-				var obj = {};
-				str.split('&').forEach(function (entry) {
-					var pair, name, value;
-					pair = entry.split('=');
-					name = urlDecode(pair[0]);
-					if (pair.length === 2) {
-						value = urlDecode(pair[1]);
-					}
-					else {
-						value = null;
-					}
-					if (name in obj) {
-						if (!Array.isArray(obj[name])) {
-							// convert to an array, perserving currnent value
-							obj[name] = [obj[name]];
-						}
-						obj[name].push(value);
-					}
-					else {
-						obj[name] = value;
-					}
-				});
-				return obj;
-			},
-
-			write: function (obj) {
-				var str = '';
-				Object.keys(obj).forEach(function (name) {
-					str = append(str, name, obj[name]);
-				});
-				return str;
-			}
-
-		};
-	}).call(exports, __webpack_require__, exports, module),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-
-}(
-	__webpack_require__(/*! !webpack amd define */ "./node_modules/webpack/buildin/amd-define.js")
-	// Boilerplate for AMD and Node
-));
-
-
-/***/ }),
-
-/***/ "./node_modules/rest/mime/type/multipart/form-data.js":
-/*!************************************************************!*\
-  !*** ./node_modules/rest/mime/type/multipart/form-data.js ***!
-  \************************************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-var __WEBPACK_AMD_DEFINE_RESULT__;/*
- * Copyright 2014 the original author or authors
- * @license MIT, see LICENSE.txt for details
- *
- * @author Michael Jackson
- */
-
-/* global FormData, File, Blob */
-
-(function (define) {
-	'use strict';
-
-	!(__WEBPACK_AMD_DEFINE_RESULT__ = (function (/* require */) {
-
-		function isFormElement(object) {
-			return object &&
-				object.nodeType === 1 && // Node.ELEMENT_NODE
-				object.tagName === 'FORM';
-		}
-
-		function createFormDataFromObject(object) {
-			var formData = new FormData();
-
-			var value;
-			for (var property in object) {
-				if (object.hasOwnProperty(property)) {
-					value = object[property];
-
-					if (value instanceof File) {
-						formData.append(property, value, value.name);
-					} else if (value instanceof Blob) {
-						formData.append(property, value);
-					} else {
-						formData.append(property, String(value));
-					}
-				}
-			}
-
-			return formData;
-		}
-
-		return {
-
-			write: function (object) {
-				if (typeof FormData === 'undefined') {
-					throw new Error('The multipart/form-data mime serializer requires FormData support');
-				}
-
-				// Support FormData directly.
-				if (object instanceof FormData) {
-					return object;
-				}
-
-				// Support <form> elements.
-				if (isFormElement(object)) {
-					return new FormData(object);
-				}
-
-				// Support plain objects, may contain File/Blob as value.
-				if (typeof object === 'object' && object !== null) {
-					return createFormDataFromObject(object);
-				}
-
-				throw new Error('Unable to create FormData from object ' + object);
-			}
-
-		};
-	}).call(exports, __webpack_require__, exports, module),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-
-}(
-	__webpack_require__(/*! !webpack amd define */ "./node_modules/webpack/buildin/amd-define.js")
-	// Boilerplate for AMD and Node
-));
-
-
-/***/ }),
-
-/***/ "./node_modules/rest/mime/type/text/plain.js":
-/*!***************************************************!*\
-  !*** ./node_modules/rest/mime/type/text/plain.js ***!
-  \***************************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-var __WEBPACK_AMD_DEFINE_RESULT__;/*
- * Copyright 2012 the original author or authors
- * @license MIT, see LICENSE.txt for details
- *
- * @author Scott Andrews
- */
-
-(function (define) {
-	'use strict';
-
-	!(__WEBPACK_AMD_DEFINE_RESULT__ = (function (/* require */) {
-
-		return {
-
-			read: function (str) {
-				return str;
-			},
-
-			write: function (obj) {
-				return obj.toString();
-			}
-
-		};
-	}).call(exports, __webpack_require__, exports, module),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-
-}(
-	__webpack_require__(/*! !webpack amd define */ "./node_modules/webpack/buildin/amd-define.js")
-	// Boilerplate for AMD and Node
-));
-
-
-/***/ }),
-
-/***/ "./node_modules/rest/util/find.js":
-/*!****************************************!*\
-  !*** ./node_modules/rest/util/find.js ***!
-  \****************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-var __WEBPACK_AMD_DEFINE_RESULT__;/*
- * Copyright 2013 the original author or authors
- * @license MIT, see LICENSE.txt for details
- *
- * @author Scott Andrews
- */
-
-(function (define) {
-	'use strict';
-
-	!(__WEBPACK_AMD_DEFINE_RESULT__ = (function (/* require */) {
-
-		return {
-
-			/**
-			 * Find objects within a graph the contain a property of a certain name.
-			 *
-			 * NOTE: this method will not discover object graph cycles.
-			 *
-			 * @param {*} obj object to search on
-			 * @param {string} prop name of the property to search for
-			 * @param {Function} callback function to receive the found properties and their parent
-			 */
-			findProperties: function findProperties(obj, prop, callback) {
-				if (typeof obj !== 'object' || obj === null) { return; }
-				if (prop in obj) {
-					callback(obj[prop], obj, prop);
-				}
-				Object.keys(obj).forEach(function (key) {
-					findProperties(obj[key], prop, callback);
-				});
-			}
-
-		};
-
-	}).call(exports, __webpack_require__, exports, module),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-
-}(
-	__webpack_require__(/*! !webpack amd define */ "./node_modules/webpack/buildin/amd-define.js")
-	// Boilerplate for AMD and Node
-));
-
-
-/***/ }),
-
-/***/ "./node_modules/rest/util/lazyPromise.js":
-/*!***********************************************!*\
-  !*** ./node_modules/rest/util/lazyPromise.js ***!
-  \***********************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-var __WEBPACK_AMD_DEFINE_RESULT__;/*
- * Copyright 2013 the original author or authors
- * @license MIT, see LICENSE.txt for details
- *
- * @author Scott Andrews
- */
-
-(function (define) {
-	'use strict';
-
-	!(__WEBPACK_AMD_DEFINE_RESULT__ = (function (require) {
-
-		var when;
-
-		when = __webpack_require__(/*! when */ "./node_modules/when/when.js");
-
-		/**
-		 * Create a promise whose work is started only when a handler is registered.
-		 *
-		 * The work function will be invoked at most once. Thrown values will result
-		 * in promise rejection.
-		 *
-		 * @param {Function} work function whose ouput is used to resolve the
-		 *   returned promise.
-		 * @returns {Promise} a lazy promise
-		 */
-		function lazyPromise(work) {
-			var defer, started, resolver, promise, then;
-
-			defer = when.defer();
-			started = false;
-
-			resolver = defer.resolver;
-			promise = defer.promise;
-			then = promise.then;
-
-			promise.then = function () {
-				if (!started) {
-					started = true;
-					when.attempt(work).then(resolver.resolve, resolver.reject);
-				}
-				return then.apply(promise, arguments);
-			};
-
-			return promise;
-		}
-
-		return lazyPromise;
-
-	}).call(exports, __webpack_require__, exports, module),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-
-}(
-	__webpack_require__(/*! !webpack amd define */ "./node_modules/webpack/buildin/amd-define.js")
-	// Boilerplate for AMD and Node
-));
-
-
-/***/ }),
-
-/***/ "./node_modules/rest/util/mixin.js":
-/*!*****************************************!*\
-  !*** ./node_modules/rest/util/mixin.js ***!
-  \*****************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-var __WEBPACK_AMD_DEFINE_RESULT__;/*
- * Copyright 2012-2013 the original author or authors
- * @license MIT, see LICENSE.txt for details
- *
- * @author Scott Andrews
- */
-
-(function (define) {
-	'use strict';
-
-	// derived from dojo.mixin
-	!(__WEBPACK_AMD_DEFINE_RESULT__ = (function (/* require */) {
-
-		var empty = {};
-
-		/**
-		 * Mix the properties from the source object into the destination object.
-		 * When the same property occurs in more then one object, the right most
-		 * value wins.
-		 *
-		 * @param {Object} dest the object to copy properties to
-		 * @param {Object} sources the objects to copy properties from.  May be 1 to N arguments, but not an Array.
-		 * @return {Object} the destination object
-		 */
-		function mixin(dest /*, sources... */) {
-			var i, l, source, name;
-
-			if (!dest) { dest = {}; }
-			for (i = 1, l = arguments.length; i < l; i += 1) {
-				source = arguments[i];
-				for (name in source) {
-					if (!(name in dest) || (dest[name] !== source[name] && (!(name in empty) || empty[name] !== source[name]))) {
-						dest[name] = source[name];
-					}
-				}
-			}
-
-			return dest; // Object
-		}
-
-		return mixin;
-
-	}).call(exports, __webpack_require__, exports, module),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-
-}(
-	__webpack_require__(/*! !webpack amd define */ "./node_modules/webpack/buildin/amd-define.js")
-	// Boilerplate for AMD and Node
-));
-
-
-/***/ }),
-
-/***/ "./node_modules/rest/util/normalizeHeaderName.js":
-/*!*******************************************************!*\
-  !*** ./node_modules/rest/util/normalizeHeaderName.js ***!
-  \*******************************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-var __WEBPACK_AMD_DEFINE_RESULT__;/*
- * Copyright 2012 the original author or authors
- * @license MIT, see LICENSE.txt for details
- *
- * @author Scott Andrews
- */
-
-(function (define) {
-	'use strict';
-
-	!(__WEBPACK_AMD_DEFINE_RESULT__ = (function (/* require */) {
-
-		/**
-		 * Normalize HTTP header names using the pseudo camel case.
-		 *
-		 * For example:
-		 *   content-type         -> Content-Type
-		 *   accepts              -> Accepts
-		 *   x-custom-header-name -> X-Custom-Header-Name
-		 *
-		 * @param {string} name the raw header name
-		 * @return {string} the normalized header name
-		 */
-		function normalizeHeaderName(name) {
-			return name.toLowerCase()
-				.split('-')
-				.map(function (chunk) { return chunk.charAt(0).toUpperCase() + chunk.slice(1); })
-				.join('-');
-		}
-
-		return normalizeHeaderName;
-
-	}).call(exports, __webpack_require__, exports, module),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-
-}(
-	__webpack_require__(/*! !webpack amd define */ "./node_modules/webpack/buildin/amd-define.js")
-	// Boilerplate for AMD and Node
-));
-
-
-/***/ }),
-
-/***/ "./node_modules/rest/util/responsePromise.js":
-/*!***************************************************!*\
-  !*** ./node_modules/rest/util/responsePromise.js ***!
-  \***************************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-var __WEBPACK_AMD_DEFINE_RESULT__;/*
- * Copyright 2014-2015 the original author or authors
- * @license MIT, see LICENSE.txt for details
- *
- * @author Scott Andrews
- */
-
-(function (define) {
-	'use strict';
-
-	!(__WEBPACK_AMD_DEFINE_RESULT__ = (function (require) {
-
-		var when = __webpack_require__(/*! when */ "./node_modules/when/when.js"),
-			normalizeHeaderName = __webpack_require__(/*! ./normalizeHeaderName */ "./node_modules/rest/util/normalizeHeaderName.js");
-
-		function property(promise, name) {
-			return promise.then(
-				function (value) {
-					return value && value[name];
-				},
-				function (value) {
-					return when.reject(value && value[name]);
-				}
-			);
-		}
-
-		/**
-		 * Obtain the response entity
-		 *
-		 * @returns {Promise} for the response entity
-		 */
-		function entity() {
-			/*jshint validthis:true */
-			return property(this, 'entity');
-		}
-
-		/**
-		 * Obtain the response status
-		 *
-		 * @returns {Promise} for the response status
-		 */
-		function status() {
-			/*jshint validthis:true */
-			return property(property(this, 'status'), 'code');
-		}
-
-		/**
-		 * Obtain the response headers map
-		 *
-		 * @returns {Promise} for the response headers map
-		 */
-		function headers() {
-			/*jshint validthis:true */
-			return property(this, 'headers');
-		}
-
-		/**
-		 * Obtain a specific response header
-		 *
-		 * @param {String} headerName the header to retrieve
-		 * @returns {Promise} for the response header's value
-		 */
-		function header(headerName) {
-			/*jshint validthis:true */
-			headerName = normalizeHeaderName(headerName);
-			return property(this.headers(), headerName);
-		}
-
-		/**
-		 * Follow a related resource
-		 *
-		 * The relationship to follow may be define as a plain string, an object
-		 * with the rel and params, or an array containing one or more entries
-		 * with the previous forms.
-		 *
-		 * Examples:
-		 *   response.follow('next')
-		 *
-		 *   response.follow({ rel: 'next', params: { pageSize: 100 } })
-		 *
-		 *   response.follow([
-		 *       { rel: 'items', params: { projection: 'noImages' } },
-		 *       'search',
-		 *       { rel: 'findByGalleryIsNull', params: { projection: 'noImages' } },
-		 *       'items'
-		 *   ])
-		 *
-		 * @param {String|Object|Array} rels one, or more, relationships to follow
-		 * @returns ResponsePromise<Response> related resource
-		 */
-		function follow(rels) {
-			/*jshint validthis:true */
-			rels = [].concat(rels);
-			return make(when.reduce(rels, function (response, rel) {
-				if (typeof rel === 'string') {
-					rel = { rel: rel };
-				}
-				if (typeof response.entity.clientFor !== 'function') {
-					throw new Error('Hypermedia response expected');
-				}
-				var client = response.entity.clientFor(rel.rel);
-				return client({ params: rel.params });
-			}, this));
-		}
-
-		/**
-		 * Wrap a Promise as an ResponsePromise
-		 *
-		 * @param {Promise<Response>} promise the promise for an HTTP Response
-		 * @returns {ResponsePromise<Response>} wrapped promise for Response with additional helper methods
-		 */
-		function make(promise) {
-			promise.status = status;
-			promise.headers = headers;
-			promise.header = header;
-			promise.entity = entity;
-			promise.follow = follow;
-			return promise;
-		}
-
-		function responsePromise() {
-			return make(when.apply(when, arguments));
-		}
-
-		responsePromise.make = make;
-		responsePromise.reject = function (val) {
-			return make(when.reject(val));
-		};
-		responsePromise.promise = function (func) {
-			return make(when.promise(func));
-		};
-
-		return responsePromise;
-
-	}).call(exports, __webpack_require__, exports, module),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-
-}(
-	__webpack_require__(/*! !webpack amd define */ "./node_modules/webpack/buildin/amd-define.js")
-	// Boilerplate for AMD and Node
-));
-
-
-/***/ }),
-
-/***/ "./node_modules/rest/util/uriEncoder.js":
-/*!**********************************************!*\
-  !*** ./node_modules/rest/util/uriEncoder.js ***!
-  \**********************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-var __WEBPACK_AMD_DEFINE_RESULT__;/*
- * Copyright 2015 the original author or authors
- * @license MIT, see LICENSE.txt for details
- *
- * @author Scott Andrews
- */
-
-(function (define) {
-	'use strict';
-
-	!(__WEBPACK_AMD_DEFINE_RESULT__ = (function (/* require */) {
-
-		var charMap;
-
-		charMap = (function () {
-			var strings = {
-				alpha: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz',
-				digit: '0123456789'
-			};
-
-			strings.genDelims = ':/?#[]@';
-			strings.subDelims = '!$&\'()*+,;=';
-			strings.reserved = strings.genDelims + strings.subDelims;
-			strings.unreserved = strings.alpha + strings.digit + '-._~';
-			strings.url = strings.reserved + strings.unreserved;
-			strings.scheme = strings.alpha + strings.digit + '+-.';
-			strings.userinfo = strings.unreserved + strings.subDelims + ':';
-			strings.host = strings.unreserved + strings.subDelims;
-			strings.port = strings.digit;
-			strings.pchar = strings.unreserved + strings.subDelims + ':@';
-			strings.segment = strings.pchar;
-			strings.path = strings.segment + '/';
-			strings.query = strings.pchar + '/?';
-			strings.fragment = strings.pchar + '/?';
-
-			return Object.keys(strings).reduce(function (charMap, set) {
-				charMap[set] = strings[set].split('').reduce(function (chars, myChar) {
-					chars[myChar] = true;
-					return chars;
-				}, {});
-				return charMap;
-			}, {});
-		}());
-
-		function encode(str, allowed) {
-			if (typeof str !== 'string') {
-				throw new Error('String required for URL encoding');
-			}
-			return str.split('').map(function (myChar) {
-				if (allowed.hasOwnProperty(myChar)) {
-					return myChar;
-				}
-				var code = myChar.charCodeAt(0);
-				if (code <= 127) {
-					var encoded = code.toString(16).toUpperCase();
-					return '%' + (encoded.length % 2 === 1 ? '0' : '') + encoded;
-				}
-				else {
-					return encodeURIComponent(myChar).toUpperCase();
-				}
-			}).join('');
-		}
-
-		function makeEncoder(allowed) {
-			allowed = allowed || charMap.unreserved;
-			return function (str) {
-				return encode(str, allowed);
-			};
-		}
-
-		function decode(str) {
-			return decodeURIComponent(str);
-		}
-
-		return {
-
-			/*
-			 * Decode URL encoded strings
-			 *
-			 * @param {string} URL encoded string
-			 * @returns {string} URL decoded string
-			 */
-			decode: decode,
-
-			/*
-			 * URL encode a string
-			 *
-			 * All but alpha-numerics and a very limited set of punctuation - . _ ~ are
-			 * encoded.
-			 *
-			 * @param {string} string to encode
-			 * @returns {string} URL encoded string
-			 */
-			encode: makeEncoder(),
-
-			/*
-			* URL encode a URL
-			*
-			* All character permitted anywhere in a URL are left unencoded even
-			* if that character is not permitted in that portion of a URL.
-			*
-			* Note: This method is typically not what you want.
-			*
-			* @param {string} string to encode
-			* @returns {string} URL encoded string
-			*/
-			encodeURL: makeEncoder(charMap.url),
-
-			/*
-			 * URL encode the scheme portion of a URL
-			 *
-			 * @param {string} string to encode
-			 * @returns {string} URL encoded string
-			 */
-			encodeScheme: makeEncoder(charMap.scheme),
-
-			/*
-			 * URL encode the user info portion of a URL
-			 *
-			 * @param {string} string to encode
-			 * @returns {string} URL encoded string
-			 */
-			encodeUserInfo: makeEncoder(charMap.userinfo),
-
-			/*
-			 * URL encode the host portion of a URL
-			 *
-			 * @param {string} string to encode
-			 * @returns {string} URL encoded string
-			 */
-			encodeHost: makeEncoder(charMap.host),
-
-			/*
-			 * URL encode the port portion of a URL
-			 *
-			 * @param {string} string to encode
-			 * @returns {string} URL encoded string
-			 */
-			encodePort: makeEncoder(charMap.port),
-
-			/*
-			 * URL encode a path segment portion of a URL
-			 *
-			 * @param {string} string to encode
-			 * @returns {string} URL encoded string
-			 */
-			encodePathSegment: makeEncoder(charMap.segment),
-
-			/*
-			 * URL encode the path portion of a URL
-			 *
-			 * @param {string} string to encode
-			 * @returns {string} URL encoded string
-			 */
-			encodePath: makeEncoder(charMap.path),
-
-			/*
-			 * URL encode the query portion of a URL
-			 *
-			 * @param {string} string to encode
-			 * @returns {string} URL encoded string
-			 */
-			encodeQuery: makeEncoder(charMap.query),
-
-			/*
-			 * URL encode the fragment portion of a URL
-			 *
-			 * @param {string} string to encode
-			 * @returns {string} URL encoded string
-			 */
-			encodeFragment: makeEncoder(charMap.fragment)
-
-		};
-
-	}).call(exports, __webpack_require__, exports, module),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-
-}(
-	__webpack_require__(/*! !webpack amd define */ "./node_modules/webpack/buildin/amd-define.js")
-	// Boilerplate for AMD and Node
-));
-
-
-/***/ }),
-
-/***/ "./node_modules/rest/util/uriTemplate.js":
-/*!***********************************************!*\
-  !*** ./node_modules/rest/util/uriTemplate.js ***!
-  \***********************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-var __WEBPACK_AMD_DEFINE_RESULT__;/*
- * Copyright 2015 the original author or authors
- * @license MIT, see LICENSE.txt for details
- *
- * @author Scott Andrews
- */
-
-(function (define) {
-	'use strict';
-
-	var undef;
-
-	!(__WEBPACK_AMD_DEFINE_RESULT__ = (function (require) {
-
-		var uriEncoder, operations, prefixRE;
-
-		uriEncoder = __webpack_require__(/*! ./uriEncoder */ "./node_modules/rest/util/uriEncoder.js");
-
-		prefixRE = /^([^:]*):([0-9]+)$/;
-		operations = {
-			'':  { first: '',  separator: ',', named: false, empty: '',  encoder: uriEncoder.encode },
-			'+': { first: '',  separator: ',', named: false, empty: '',  encoder: uriEncoder.encodeURL },
-			'#': { first: '#', separator: ',', named: false, empty: '',  encoder: uriEncoder.encodeURL },
-			'.': { first: '.', separator: '.', named: false, empty: '',  encoder: uriEncoder.encode },
-			'/': { first: '/', separator: '/', named: false, empty: '',  encoder: uriEncoder.encode },
-			';': { first: ';', separator: ';', named: true,  empty: '',  encoder: uriEncoder.encode },
-			'?': { first: '?', separator: '&', named: true,  empty: '=', encoder: uriEncoder.encode },
-			'&': { first: '&', separator: '&', named: true,  empty: '=', encoder: uriEncoder.encode },
-			'=': { reserved: true },
-			',': { reserved: true },
-			'!': { reserved: true },
-			'@': { reserved: true },
-			'|': { reserved: true }
-		};
-
-		function apply(operation, expression, params) {
-			/*jshint maxcomplexity:11 */
-			return expression.split(',').reduce(function (result, variable) {
-				var opts, value;
-
-				opts = {};
-				if (variable.slice(-1) === '*') {
-					variable = variable.slice(0, -1);
-					opts.explode = true;
-				}
-				if (prefixRE.test(variable)) {
-					var prefix = prefixRE.exec(variable);
-					variable = prefix[1];
-					opts.maxLength = parseInt(prefix[2]);
-				}
-
-				variable = uriEncoder.decode(variable);
-				value = params[variable];
-
-				if (value === undef || value === null) {
-					return result;
-				}
-				if (Array.isArray(value)) {
-					result += value.reduce(function (result, value) {
-						if (result.length) {
-							result += opts.explode ? operation.separator : ',';
-							if (operation.named && opts.explode) {
-								result += operation.encoder(variable);
-								result += value.length ? '=' : operation.empty;
-							}
-						}
-						else {
-							result += operation.first;
-							if (operation.named) {
-								result += operation.encoder(variable);
-								result += value.length ? '=' : operation.empty;
-							}
-						}
-						result += operation.encoder(value);
-						return result;
-					}, '');
-				}
-				else if (typeof value === 'object') {
-					result += Object.keys(value).reduce(function (result, name) {
-						if (result.length) {
-							result += opts.explode ? operation.separator : ',';
-						}
-						else {
-							result += operation.first;
-							if (operation.named && !opts.explode) {
-								result += operation.encoder(variable);
-								result += value[name].length ? '=' : operation.empty;
-							}
-						}
-						result += operation.encoder(name);
-						result += opts.explode ? '=' : ',';
-						result += operation.encoder(value[name]);
-						return result;
-					}, '');
-				}
-				else {
-					value = String(value);
-					if (opts.maxLength) {
-						value = value.slice(0, opts.maxLength);
-					}
-					result += result.length ? operation.separator : operation.first;
-					if (operation.named) {
-						result += operation.encoder(variable);
-						result += value.length ? '=' : operation.empty;
-					}
-					result += operation.encoder(value);
-				}
-
-				return result;
-			}, '');
-		}
-
-		function expandExpression(expression, params) {
-			var operation;
-
-			operation = operations[expression.slice(0,1)];
-			if (operation) {
-				expression = expression.slice(1);
-			}
-			else {
-				operation = operations[''];
-			}
-
-			if (operation.reserved) {
-				throw new Error('Reserved expression operations are not supported');
-			}
-
-			return apply(operation, expression, params);
-		}
-
-		function expandTemplate(template, params) {
-			var start, end, uri;
-
-			uri = '';
-			end = 0;
-			while (true) {
-				start = template.indexOf('{', end);
-				if (start === -1) {
-					// no more expressions
-					uri += template.slice(end);
-					break;
-				}
-				uri += template.slice(end, start);
-				end = template.indexOf('}', start) + 1;
-				uri += expandExpression(template.slice(start + 1, end - 1), params);
-			}
-
-			return uri;
-		}
-
-		return {
-
-			/**
-			 * Expand a URI Template with parameters to form a URI.
-			 *
-			 * Full implementation (level 4) of rfc6570.
-			 * @see https://tools.ietf.org/html/rfc6570
-			 *
-			 * @param {string} template URI template
-			 * @param {Object} [params] params to apply to the template durring expantion
-			 * @returns {string} expanded URI
-			 */
-			expand: expandTemplate
-
-		};
-
-	}).call(exports, __webpack_require__, exports, module),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-
-}(
-	__webpack_require__(/*! !webpack amd define */ "./node_modules/webpack/buildin/amd-define.js")
-	// Boilerplate for AMD and Node
-));
-
-
-/***/ }),
-
 /***/ "./node_modules/scheduler/cjs/scheduler-tracing.development.js":
 /*!*********************************************************************!*\
   !*** ./node_modules/scheduler/cjs/scheduler-tracing.development.js ***!
@@ -35849,20 +35471,6 @@ module.exports = Url;
 
 /***/ }),
 
-/***/ "./node_modules/webpack/buildin/amd-define.js":
-/*!***************************************!*\
-  !*** (webpack)/buildin/amd-define.js ***!
-  \***************************************/
-/*! no static exports found */
-/***/ (function(module, exports) {
-
-module.exports = function() {
-	throw new Error("define cannot be used indirect");
-};
-
-
-/***/ }),
-
 /***/ "./node_modules/webpack/buildin/amd-options.js":
 /*!****************************************!*\
   !*** (webpack)/buildin/amd-options.js ***!
@@ -36017,2612 +35625,6 @@ module.exports = {"_from":"websocket@latest","_id":"websocket@1.0.28","_inBundle
 
 /***/ }),
 
-/***/ "./node_modules/when/lib/Promise.js":
-/*!******************************************!*\
-  !*** ./node_modules/when/lib/Promise.js ***!
-  \******************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-var __WEBPACK_AMD_DEFINE_RESULT__;/** @license MIT License (c) copyright 2010-2014 original author or authors */
-/** @author Brian Cavalier */
-/** @author John Hann */
-
-(function(define) { 'use strict';
-!(__WEBPACK_AMD_DEFINE_RESULT__ = (function (require) {
-
-	var makePromise = __webpack_require__(/*! ./makePromise */ "./node_modules/when/lib/makePromise.js");
-	var Scheduler = __webpack_require__(/*! ./Scheduler */ "./node_modules/when/lib/Scheduler.js");
-	var async = __webpack_require__(/*! ./env */ "./node_modules/when/lib/env.js").asap;
-
-	return makePromise({
-		scheduler: new Scheduler(async)
-	});
-
-}).call(exports, __webpack_require__, exports, module),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-})(__webpack_require__(/*! !webpack amd define */ "./node_modules/webpack/buildin/amd-define.js"));
-
-
-/***/ }),
-
-/***/ "./node_modules/when/lib/Scheduler.js":
-/*!********************************************!*\
-  !*** ./node_modules/when/lib/Scheduler.js ***!
-  \********************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-var __WEBPACK_AMD_DEFINE_RESULT__;/** @license MIT License (c) copyright 2010-2014 original author or authors */
-/** @author Brian Cavalier */
-/** @author John Hann */
-
-(function(define) { 'use strict';
-!(__WEBPACK_AMD_DEFINE_RESULT__ = (function() {
-
-	// Credit to Twisol (https://github.com/Twisol) for suggesting
-	// this type of extensible queue + trampoline approach for next-tick conflation.
-
-	/**
-	 * Async task scheduler
-	 * @param {function} async function to schedule a single async function
-	 * @constructor
-	 */
-	function Scheduler(async) {
-		this._async = async;
-		this._running = false;
-
-		this._queue = this;
-		this._queueLen = 0;
-		this._afterQueue = {};
-		this._afterQueueLen = 0;
-
-		var self = this;
-		this.drain = function() {
-			self._drain();
-		};
-	}
-
-	/**
-	 * Enqueue a task
-	 * @param {{ run:function }} task
-	 */
-	Scheduler.prototype.enqueue = function(task) {
-		this._queue[this._queueLen++] = task;
-		this.run();
-	};
-
-	/**
-	 * Enqueue a task to run after the main task queue
-	 * @param {{ run:function }} task
-	 */
-	Scheduler.prototype.afterQueue = function(task) {
-		this._afterQueue[this._afterQueueLen++] = task;
-		this.run();
-	};
-
-	Scheduler.prototype.run = function() {
-		if (!this._running) {
-			this._running = true;
-			this._async(this.drain);
-		}
-	};
-
-	/**
-	 * Drain the handler queue entirely, and then the after queue
-	 */
-	Scheduler.prototype._drain = function() {
-		var i = 0;
-		for (; i < this._queueLen; ++i) {
-			this._queue[i].run();
-			this._queue[i] = void 0;
-		}
-
-		this._queueLen = 0;
-		this._running = false;
-
-		for (i = 0; i < this._afterQueueLen; ++i) {
-			this._afterQueue[i].run();
-			this._afterQueue[i] = void 0;
-		}
-
-		this._afterQueueLen = 0;
-	};
-
-	return Scheduler;
-
-}).call(exports, __webpack_require__, exports, module),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-}(__webpack_require__(/*! !webpack amd define */ "./node_modules/webpack/buildin/amd-define.js")));
-
-
-/***/ }),
-
-/***/ "./node_modules/when/lib/TimeoutError.js":
-/*!***********************************************!*\
-  !*** ./node_modules/when/lib/TimeoutError.js ***!
-  \***********************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-var __WEBPACK_AMD_DEFINE_RESULT__;/** @license MIT License (c) copyright 2010-2014 original author or authors */
-/** @author Brian Cavalier */
-/** @author John Hann */
-
-(function(define) { 'use strict';
-!(__WEBPACK_AMD_DEFINE_RESULT__ = (function() {
-
-	/**
-	 * Custom error type for promises rejected by promise.timeout
-	 * @param {string} message
-	 * @constructor
-	 */
-	function TimeoutError (message) {
-		Error.call(this);
-		this.message = message;
-		this.name = TimeoutError.name;
-		if (typeof Error.captureStackTrace === 'function') {
-			Error.captureStackTrace(this, TimeoutError);
-		}
-	}
-
-	TimeoutError.prototype = Object.create(Error.prototype);
-	TimeoutError.prototype.constructor = TimeoutError;
-
-	return TimeoutError;
-}).call(exports, __webpack_require__, exports, module),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-}(__webpack_require__(/*! !webpack amd define */ "./node_modules/webpack/buildin/amd-define.js")));
-
-/***/ }),
-
-/***/ "./node_modules/when/lib/apply.js":
-/*!****************************************!*\
-  !*** ./node_modules/when/lib/apply.js ***!
-  \****************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-var __WEBPACK_AMD_DEFINE_RESULT__;/** @license MIT License (c) copyright 2010-2014 original author or authors */
-/** @author Brian Cavalier */
-/** @author John Hann */
-
-(function(define) { 'use strict';
-!(__WEBPACK_AMD_DEFINE_RESULT__ = (function() {
-
-	makeApply.tryCatchResolve = tryCatchResolve;
-
-	return makeApply;
-
-	function makeApply(Promise, call) {
-		if(arguments.length < 2) {
-			call = tryCatchResolve;
-		}
-
-		return apply;
-
-		function apply(f, thisArg, args) {
-			var p = Promise._defer();
-			var l = args.length;
-			var params = new Array(l);
-			callAndResolve({ f:f, thisArg:thisArg, args:args, params:params, i:l-1, call:call }, p._handler);
-
-			return p;
-		}
-
-		function callAndResolve(c, h) {
-			if(c.i < 0) {
-				return call(c.f, c.thisArg, c.params, h);
-			}
-
-			var handler = Promise._handler(c.args[c.i]);
-			handler.fold(callAndResolveNext, c, void 0, h);
-		}
-
-		function callAndResolveNext(c, x, h) {
-			c.params[c.i] = x;
-			c.i -= 1;
-			callAndResolve(c, h);
-		}
-	}
-
-	function tryCatchResolve(f, thisArg, args, resolver) {
-		try {
-			resolver.resolve(f.apply(thisArg, args));
-		} catch(e) {
-			resolver.reject(e);
-		}
-	}
-
-}).call(exports, __webpack_require__, exports, module),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-}(__webpack_require__(/*! !webpack amd define */ "./node_modules/webpack/buildin/amd-define.js")));
-
-
-
-
-/***/ }),
-
-/***/ "./node_modules/when/lib/decorators/array.js":
-/*!***************************************************!*\
-  !*** ./node_modules/when/lib/decorators/array.js ***!
-  \***************************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-var __WEBPACK_AMD_DEFINE_RESULT__;/** @license MIT License (c) copyright 2010-2014 original author or authors */
-/** @author Brian Cavalier */
-/** @author John Hann */
-
-(function(define) { 'use strict';
-!(__WEBPACK_AMD_DEFINE_RESULT__ = (function(require) {
-
-	var state = __webpack_require__(/*! ../state */ "./node_modules/when/lib/state.js");
-	var applier = __webpack_require__(/*! ../apply */ "./node_modules/when/lib/apply.js");
-
-	return function array(Promise) {
-
-		var applyFold = applier(Promise);
-		var toPromise = Promise.resolve;
-		var all = Promise.all;
-
-		var ar = Array.prototype.reduce;
-		var arr = Array.prototype.reduceRight;
-		var slice = Array.prototype.slice;
-
-		// Additional array combinators
-
-		Promise.any = any;
-		Promise.some = some;
-		Promise.settle = settle;
-
-		Promise.map = map;
-		Promise.filter = filter;
-		Promise.reduce = reduce;
-		Promise.reduceRight = reduceRight;
-
-		/**
-		 * When this promise fulfills with an array, do
-		 * onFulfilled.apply(void 0, array)
-		 * @param {function} onFulfilled function to apply
-		 * @returns {Promise} promise for the result of applying onFulfilled
-		 */
-		Promise.prototype.spread = function(onFulfilled) {
-			return this.then(all).then(function(array) {
-				return onFulfilled.apply(this, array);
-			});
-		};
-
-		return Promise;
-
-		/**
-		 * One-winner competitive race.
-		 * Return a promise that will fulfill when one of the promises
-		 * in the input array fulfills, or will reject when all promises
-		 * have rejected.
-		 * @param {array} promises
-		 * @returns {Promise} promise for the first fulfilled value
-		 */
-		function any(promises) {
-			var p = Promise._defer();
-			var resolver = p._handler;
-			var l = promises.length>>>0;
-
-			var pending = l;
-			var errors = [];
-
-			for (var h, x, i = 0; i < l; ++i) {
-				x = promises[i];
-				if(x === void 0 && !(i in promises)) {
-					--pending;
-					continue;
-				}
-
-				h = Promise._handler(x);
-				if(h.state() > 0) {
-					resolver.become(h);
-					Promise._visitRemaining(promises, i, h);
-					break;
-				} else {
-					h.visit(resolver, handleFulfill, handleReject);
-				}
-			}
-
-			if(pending === 0) {
-				resolver.reject(new RangeError('any(): array must not be empty'));
-			}
-
-			return p;
-
-			function handleFulfill(x) {
-				/*jshint validthis:true*/
-				errors = null;
-				this.resolve(x); // this === resolver
-			}
-
-			function handleReject(e) {
-				/*jshint validthis:true*/
-				if(this.resolved) { // this === resolver
-					return;
-				}
-
-				errors.push(e);
-				if(--pending === 0) {
-					this.reject(errors);
-				}
-			}
-		}
-
-		/**
-		 * N-winner competitive race
-		 * Return a promise that will fulfill when n input promises have
-		 * fulfilled, or will reject when it becomes impossible for n
-		 * input promises to fulfill (ie when promises.length - n + 1
-		 * have rejected)
-		 * @param {array} promises
-		 * @param {number} n
-		 * @returns {Promise} promise for the earliest n fulfillment values
-		 *
-		 * @deprecated
-		 */
-		function some(promises, n) {
-			/*jshint maxcomplexity:7*/
-			var p = Promise._defer();
-			var resolver = p._handler;
-
-			var results = [];
-			var errors = [];
-
-			var l = promises.length>>>0;
-			var nFulfill = 0;
-			var nReject;
-			var x, i; // reused in both for() loops
-
-			// First pass: count actual array items
-			for(i=0; i<l; ++i) {
-				x = promises[i];
-				if(x === void 0 && !(i in promises)) {
-					continue;
-				}
-				++nFulfill;
-			}
-
-			// Compute actual goals
-			n = Math.max(n, 0);
-			nReject = (nFulfill - n + 1);
-			nFulfill = Math.min(n, nFulfill);
-
-			if(n > nFulfill) {
-				resolver.reject(new RangeError('some(): array must contain at least '
-				+ n + ' item(s), but had ' + nFulfill));
-			} else if(nFulfill === 0) {
-				resolver.resolve(results);
-			}
-
-			// Second pass: observe each array item, make progress toward goals
-			for(i=0; i<l; ++i) {
-				x = promises[i];
-				if(x === void 0 && !(i in promises)) {
-					continue;
-				}
-
-				Promise._handler(x).visit(resolver, fulfill, reject, resolver.notify);
-			}
-
-			return p;
-
-			function fulfill(x) {
-				/*jshint validthis:true*/
-				if(this.resolved) { // this === resolver
-					return;
-				}
-
-				results.push(x);
-				if(--nFulfill === 0) {
-					errors = null;
-					this.resolve(results);
-				}
-			}
-
-			function reject(e) {
-				/*jshint validthis:true*/
-				if(this.resolved) { // this === resolver
-					return;
-				}
-
-				errors.push(e);
-				if(--nReject === 0) {
-					results = null;
-					this.reject(errors);
-				}
-			}
-		}
-
-		/**
-		 * Apply f to the value of each promise in a list of promises
-		 * and return a new list containing the results.
-		 * @param {array} promises
-		 * @param {function(x:*, index:Number):*} f mapping function
-		 * @returns {Promise}
-		 */
-		function map(promises, f) {
-			return Promise._traverse(f, promises);
-		}
-
-		/**
-		 * Filter the provided array of promises using the provided predicate.  Input may
-		 * contain promises and values
-		 * @param {Array} promises array of promises and values
-		 * @param {function(x:*, index:Number):boolean} predicate filtering predicate.
-		 *  Must return truthy (or promise for truthy) for items to retain.
-		 * @returns {Promise} promise that will fulfill with an array containing all items
-		 *  for which predicate returned truthy.
-		 */
-		function filter(promises, predicate) {
-			var a = slice.call(promises);
-			return Promise._traverse(predicate, a).then(function(keep) {
-				return filterSync(a, keep);
-			});
-		}
-
-		function filterSync(promises, keep) {
-			// Safe because we know all promises have fulfilled if we've made it this far
-			var l = keep.length;
-			var filtered = new Array(l);
-			for(var i=0, j=0; i<l; ++i) {
-				if(keep[i]) {
-					filtered[j++] = Promise._handler(promises[i]).value;
-				}
-			}
-			filtered.length = j;
-			return filtered;
-
-		}
-
-		/**
-		 * Return a promise that will always fulfill with an array containing
-		 * the outcome states of all input promises.  The returned promise
-		 * will never reject.
-		 * @param {Array} promises
-		 * @returns {Promise} promise for array of settled state descriptors
-		 */
-		function settle(promises) {
-			return all(promises.map(settleOne));
-		}
-
-		function settleOne(p) {
-			// Optimize the case where we get an already-resolved when.js promise
-			//  by extracting its state:
-			var handler;
-			if (p instanceof Promise) {
-				// This is our own Promise type and we can reach its handler internals:
-				handler = p._handler.join();
-			}
-			if((handler && handler.state() === 0) || !handler) {
-				// Either still pending, or not a Promise at all:
-				return toPromise(p).then(state.fulfilled, state.rejected);
-			}
-
-			// The promise is our own, but it is already resolved. Take a shortcut.
-			// Since we're not actually handling the resolution, we need to disable
-			// rejection reporting.
-			handler._unreport();
-			return state.inspect(handler);
-		}
-
-		/**
-		 * Traditional reduce function, similar to `Array.prototype.reduce()`, but
-		 * input may contain promises and/or values, and reduceFunc
-		 * may return either a value or a promise, *and* initialValue may
-		 * be a promise for the starting value.
-		 * @param {Array|Promise} promises array or promise for an array of anything,
-		 *      may contain a mix of promises and values.
-		 * @param {function(accumulated:*, x:*, index:Number):*} f reduce function
-		 * @returns {Promise} that will resolve to the final reduced value
-		 */
-		function reduce(promises, f /*, initialValue */) {
-			return arguments.length > 2 ? ar.call(promises, liftCombine(f), arguments[2])
-					: ar.call(promises, liftCombine(f));
-		}
-
-		/**
-		 * Traditional reduce function, similar to `Array.prototype.reduceRight()`, but
-		 * input may contain promises and/or values, and reduceFunc
-		 * may return either a value or a promise, *and* initialValue may
-		 * be a promise for the starting value.
-		 * @param {Array|Promise} promises array or promise for an array of anything,
-		 *      may contain a mix of promises and values.
-		 * @param {function(accumulated:*, x:*, index:Number):*} f reduce function
-		 * @returns {Promise} that will resolve to the final reduced value
-		 */
-		function reduceRight(promises, f /*, initialValue */) {
-			return arguments.length > 2 ? arr.call(promises, liftCombine(f), arguments[2])
-					: arr.call(promises, liftCombine(f));
-		}
-
-		function liftCombine(f) {
-			return function(z, x, i) {
-				return applyFold(f, void 0, [z,x,i]);
-			};
-		}
-	};
-
-}).call(exports, __webpack_require__, exports, module),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-}(__webpack_require__(/*! !webpack amd define */ "./node_modules/webpack/buildin/amd-define.js")));
-
-
-/***/ }),
-
-/***/ "./node_modules/when/lib/decorators/flow.js":
-/*!**************************************************!*\
-  !*** ./node_modules/when/lib/decorators/flow.js ***!
-  \**************************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-var __WEBPACK_AMD_DEFINE_RESULT__;/** @license MIT License (c) copyright 2010-2014 original author or authors */
-/** @author Brian Cavalier */
-/** @author John Hann */
-
-(function(define) { 'use strict';
-!(__WEBPACK_AMD_DEFINE_RESULT__ = (function() {
-
-	return function flow(Promise) {
-
-		var resolve = Promise.resolve;
-		var reject = Promise.reject;
-		var origCatch = Promise.prototype['catch'];
-
-		/**
-		 * Handle the ultimate fulfillment value or rejection reason, and assume
-		 * responsibility for all errors.  If an error propagates out of result
-		 * or handleFatalError, it will be rethrown to the host, resulting in a
-		 * loud stack track on most platforms and a crash on some.
-		 * @param {function?} onResult
-		 * @param {function?} onError
-		 * @returns {undefined}
-		 */
-		Promise.prototype.done = function(onResult, onError) {
-			this._handler.visit(this._handler.receiver, onResult, onError);
-		};
-
-		/**
-		 * Add Error-type and predicate matching to catch.  Examples:
-		 * promise.catch(TypeError, handleTypeError)
-		 *   .catch(predicate, handleMatchedErrors)
-		 *   .catch(handleRemainingErrors)
-		 * @param onRejected
-		 * @returns {*}
-		 */
-		Promise.prototype['catch'] = Promise.prototype.otherwise = function(onRejected) {
-			if (arguments.length < 2) {
-				return origCatch.call(this, onRejected);
-			}
-
-			if(typeof onRejected !== 'function') {
-				return this.ensure(rejectInvalidPredicate);
-			}
-
-			return origCatch.call(this, createCatchFilter(arguments[1], onRejected));
-		};
-
-		/**
-		 * Wraps the provided catch handler, so that it will only be called
-		 * if the predicate evaluates truthy
-		 * @param {?function} handler
-		 * @param {function} predicate
-		 * @returns {function} conditional catch handler
-		 */
-		function createCatchFilter(handler, predicate) {
-			return function(e) {
-				return evaluatePredicate(e, predicate)
-					? handler.call(this, e)
-					: reject(e);
-			};
-		}
-
-		/**
-		 * Ensures that onFulfilledOrRejected will be called regardless of whether
-		 * this promise is fulfilled or rejected.  onFulfilledOrRejected WILL NOT
-		 * receive the promises' value or reason.  Any returned value will be disregarded.
-		 * onFulfilledOrRejected may throw or return a rejected promise to signal
-		 * an additional error.
-		 * @param {function} handler handler to be called regardless of
-		 *  fulfillment or rejection
-		 * @returns {Promise}
-		 */
-		Promise.prototype['finally'] = Promise.prototype.ensure = function(handler) {
-			if(typeof handler !== 'function') {
-				return this;
-			}
-
-			return this.then(function(x) {
-				return runSideEffect(handler, this, identity, x);
-			}, function(e) {
-				return runSideEffect(handler, this, reject, e);
-			});
-		};
-
-		function runSideEffect (handler, thisArg, propagate, value) {
-			var result = handler.call(thisArg);
-			return maybeThenable(result)
-				? propagateValue(result, propagate, value)
-				: propagate(value);
-		}
-
-		function propagateValue (result, propagate, x) {
-			return resolve(result).then(function () {
-				return propagate(x);
-			});
-		}
-
-		/**
-		 * Recover from a failure by returning a defaultValue.  If defaultValue
-		 * is a promise, it's fulfillment value will be used.  If defaultValue is
-		 * a promise that rejects, the returned promise will reject with the
-		 * same reason.
-		 * @param {*} defaultValue
-		 * @returns {Promise} new promise
-		 */
-		Promise.prototype['else'] = Promise.prototype.orElse = function(defaultValue) {
-			return this.then(void 0, function() {
-				return defaultValue;
-			});
-		};
-
-		/**
-		 * Shortcut for .then(function() { return value; })
-		 * @param  {*} value
-		 * @return {Promise} a promise that:
-		 *  - is fulfilled if value is not a promise, or
-		 *  - if value is a promise, will fulfill with its value, or reject
-		 *    with its reason.
-		 */
-		Promise.prototype['yield'] = function(value) {
-			return this.then(function() {
-				return value;
-			});
-		};
-
-		/**
-		 * Runs a side effect when this promise fulfills, without changing the
-		 * fulfillment value.
-		 * @param {function} onFulfilledSideEffect
-		 * @returns {Promise}
-		 */
-		Promise.prototype.tap = function(onFulfilledSideEffect) {
-			return this.then(onFulfilledSideEffect)['yield'](this);
-		};
-
-		return Promise;
-	};
-
-	function rejectInvalidPredicate() {
-		throw new TypeError('catch predicate must be a function');
-	}
-
-	function evaluatePredicate(e, predicate) {
-		return isError(predicate) ? e instanceof predicate : predicate(e);
-	}
-
-	function isError(predicate) {
-		return predicate === Error
-			|| (predicate != null && predicate.prototype instanceof Error);
-	}
-
-	function maybeThenable(x) {
-		return (typeof x === 'object' || typeof x === 'function') && x !== null;
-	}
-
-	function identity(x) {
-		return x;
-	}
-
-}).call(exports, __webpack_require__, exports, module),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-}(__webpack_require__(/*! !webpack amd define */ "./node_modules/webpack/buildin/amd-define.js")));
-
-
-/***/ }),
-
-/***/ "./node_modules/when/lib/decorators/fold.js":
-/*!**************************************************!*\
-  !*** ./node_modules/when/lib/decorators/fold.js ***!
-  \**************************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-var __WEBPACK_AMD_DEFINE_RESULT__;/** @license MIT License (c) copyright 2010-2014 original author or authors */
-/** @author Brian Cavalier */
-/** @author John Hann */
-/** @author Jeff Escalante */
-
-(function(define) { 'use strict';
-!(__WEBPACK_AMD_DEFINE_RESULT__ = (function() {
-
-	return function fold(Promise) {
-
-		Promise.prototype.fold = function(f, z) {
-			var promise = this._beget();
-
-			this._handler.fold(function(z, x, to) {
-				Promise._handler(z).fold(function(x, z, to) {
-					to.resolve(f.call(this, z, x));
-				}, x, this, to);
-			}, z, promise._handler.receiver, promise._handler);
-
-			return promise;
-		};
-
-		return Promise;
-	};
-
-}).call(exports, __webpack_require__, exports, module),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-}(__webpack_require__(/*! !webpack amd define */ "./node_modules/webpack/buildin/amd-define.js")));
-
-
-/***/ }),
-
-/***/ "./node_modules/when/lib/decorators/inspect.js":
-/*!*****************************************************!*\
-  !*** ./node_modules/when/lib/decorators/inspect.js ***!
-  \*****************************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-var __WEBPACK_AMD_DEFINE_RESULT__;/** @license MIT License (c) copyright 2010-2014 original author or authors */
-/** @author Brian Cavalier */
-/** @author John Hann */
-
-(function(define) { 'use strict';
-!(__WEBPACK_AMD_DEFINE_RESULT__ = (function(require) {
-
-	var inspect = __webpack_require__(/*! ../state */ "./node_modules/when/lib/state.js").inspect;
-
-	return function inspection(Promise) {
-
-		Promise.prototype.inspect = function() {
-			return inspect(Promise._handler(this));
-		};
-
-		return Promise;
-	};
-
-}).call(exports, __webpack_require__, exports, module),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-}(__webpack_require__(/*! !webpack amd define */ "./node_modules/webpack/buildin/amd-define.js")));
-
-
-/***/ }),
-
-/***/ "./node_modules/when/lib/decorators/iterate.js":
-/*!*****************************************************!*\
-  !*** ./node_modules/when/lib/decorators/iterate.js ***!
-  \*****************************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-var __WEBPACK_AMD_DEFINE_RESULT__;/** @license MIT License (c) copyright 2010-2014 original author or authors */
-/** @author Brian Cavalier */
-/** @author John Hann */
-
-(function(define) { 'use strict';
-!(__WEBPACK_AMD_DEFINE_RESULT__ = (function() {
-
-	return function generate(Promise) {
-
-		var resolve = Promise.resolve;
-
-		Promise.iterate = iterate;
-		Promise.unfold = unfold;
-
-		return Promise;
-
-		/**
-		 * @deprecated Use github.com/cujojs/most streams and most.iterate
-		 * Generate a (potentially infinite) stream of promised values:
-		 * x, f(x), f(f(x)), etc. until condition(x) returns true
-		 * @param {function} f function to generate a new x from the previous x
-		 * @param {function} condition function that, given the current x, returns
-		 *  truthy when the iterate should stop
-		 * @param {function} handler function to handle the value produced by f
-		 * @param {*|Promise} x starting value, may be a promise
-		 * @return {Promise} the result of the last call to f before
-		 *  condition returns true
-		 */
-		function iterate(f, condition, handler, x) {
-			return unfold(function(x) {
-				return [x, f(x)];
-			}, condition, handler, x);
-		}
-
-		/**
-		 * @deprecated Use github.com/cujojs/most streams and most.unfold
-		 * Generate a (potentially infinite) stream of promised values
-		 * by applying handler(generator(seed)) iteratively until
-		 * condition(seed) returns true.
-		 * @param {function} unspool function that generates a [value, newSeed]
-		 *  given a seed.
-		 * @param {function} condition function that, given the current seed, returns
-		 *  truthy when the unfold should stop
-		 * @param {function} handler function to handle the value produced by unspool
-		 * @param x {*|Promise} starting value, may be a promise
-		 * @return {Promise} the result of the last value produced by unspool before
-		 *  condition returns true
-		 */
-		function unfold(unspool, condition, handler, x) {
-			return resolve(x).then(function(seed) {
-				return resolve(condition(seed)).then(function(done) {
-					return done ? seed : resolve(unspool(seed)).spread(next);
-				});
-			});
-
-			function next(item, newSeed) {
-				return resolve(handler(item)).then(function() {
-					return unfold(unspool, condition, handler, newSeed);
-				});
-			}
-		}
-	};
-
-}).call(exports, __webpack_require__, exports, module),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-}(__webpack_require__(/*! !webpack amd define */ "./node_modules/webpack/buildin/amd-define.js")));
-
-
-/***/ }),
-
-/***/ "./node_modules/when/lib/decorators/progress.js":
-/*!******************************************************!*\
-  !*** ./node_modules/when/lib/decorators/progress.js ***!
-  \******************************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-var __WEBPACK_AMD_DEFINE_RESULT__;/** @license MIT License (c) copyright 2010-2014 original author or authors */
-/** @author Brian Cavalier */
-/** @author John Hann */
-
-(function(define) { 'use strict';
-!(__WEBPACK_AMD_DEFINE_RESULT__ = (function() {
-
-	return function progress(Promise) {
-
-		/**
-		 * @deprecated
-		 * Register a progress handler for this promise
-		 * @param {function} onProgress
-		 * @returns {Promise}
-		 */
-		Promise.prototype.progress = function(onProgress) {
-			return this.then(void 0, void 0, onProgress);
-		};
-
-		return Promise;
-	};
-
-}).call(exports, __webpack_require__, exports, module),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-}(__webpack_require__(/*! !webpack amd define */ "./node_modules/webpack/buildin/amd-define.js")));
-
-
-/***/ }),
-
-/***/ "./node_modules/when/lib/decorators/timed.js":
-/*!***************************************************!*\
-  !*** ./node_modules/when/lib/decorators/timed.js ***!
-  \***************************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-var __WEBPACK_AMD_DEFINE_RESULT__;/** @license MIT License (c) copyright 2010-2014 original author or authors */
-/** @author Brian Cavalier */
-/** @author John Hann */
-
-(function(define) { 'use strict';
-!(__WEBPACK_AMD_DEFINE_RESULT__ = (function(require) {
-
-	var env = __webpack_require__(/*! ../env */ "./node_modules/when/lib/env.js");
-	var TimeoutError = __webpack_require__(/*! ../TimeoutError */ "./node_modules/when/lib/TimeoutError.js");
-
-	function setTimeout(f, ms, x, y) {
-		return env.setTimer(function() {
-			f(x, y, ms);
-		}, ms);
-	}
-
-	return function timed(Promise) {
-		/**
-		 * Return a new promise whose fulfillment value is revealed only
-		 * after ms milliseconds
-		 * @param {number} ms milliseconds
-		 * @returns {Promise}
-		 */
-		Promise.prototype.delay = function(ms) {
-			var p = this._beget();
-			this._handler.fold(handleDelay, ms, void 0, p._handler);
-			return p;
-		};
-
-		function handleDelay(ms, x, h) {
-			setTimeout(resolveDelay, ms, x, h);
-		}
-
-		function resolveDelay(x, h) {
-			h.resolve(x);
-		}
-
-		/**
-		 * Return a new promise that rejects after ms milliseconds unless
-		 * this promise fulfills earlier, in which case the returned promise
-		 * fulfills with the same value.
-		 * @param {number} ms milliseconds
-		 * @param {Error|*=} reason optional rejection reason to use, defaults
-		 *   to a TimeoutError if not provided
-		 * @returns {Promise}
-		 */
-		Promise.prototype.timeout = function(ms, reason) {
-			var p = this._beget();
-			var h = p._handler;
-
-			var t = setTimeout(onTimeout, ms, reason, p._handler);
-
-			this._handler.visit(h,
-				function onFulfill(x) {
-					env.clearTimer(t);
-					this.resolve(x); // this = h
-				},
-				function onReject(x) {
-					env.clearTimer(t);
-					this.reject(x); // this = h
-				},
-				h.notify);
-
-			return p;
-		};
-
-		function onTimeout(reason, h, ms) {
-			var e = typeof reason === 'undefined'
-				? new TimeoutError('timed out after ' + ms + 'ms')
-				: reason;
-			h.reject(e);
-		}
-
-		return Promise;
-	};
-
-}).call(exports, __webpack_require__, exports, module),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-}(__webpack_require__(/*! !webpack amd define */ "./node_modules/webpack/buildin/amd-define.js")));
-
-
-/***/ }),
-
-/***/ "./node_modules/when/lib/decorators/unhandledRejection.js":
-/*!****************************************************************!*\
-  !*** ./node_modules/when/lib/decorators/unhandledRejection.js ***!
-  \****************************************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-var __WEBPACK_AMD_DEFINE_RESULT__;/** @license MIT License (c) copyright 2010-2014 original author or authors */
-/** @author Brian Cavalier */
-/** @author John Hann */
-
-(function(define) { 'use strict';
-!(__WEBPACK_AMD_DEFINE_RESULT__ = (function(require) {
-
-	var setTimer = __webpack_require__(/*! ../env */ "./node_modules/when/lib/env.js").setTimer;
-	var format = __webpack_require__(/*! ../format */ "./node_modules/when/lib/format.js");
-
-	return function unhandledRejection(Promise) {
-
-		var logError = noop;
-		var logInfo = noop;
-		var localConsole;
-
-		if(typeof console !== 'undefined') {
-			// Alias console to prevent things like uglify's drop_console option from
-			// removing console.log/error. Unhandled rejections fall into the same
-			// category as uncaught exceptions, and build tools shouldn't silence them.
-			localConsole = console;
-			logError = typeof localConsole.error !== 'undefined'
-				? function (e) { localConsole.error(e); }
-				: function (e) { localConsole.log(e); };
-
-			logInfo = typeof localConsole.info !== 'undefined'
-				? function (e) { localConsole.info(e); }
-				: function (e) { localConsole.log(e); };
-		}
-
-		Promise.onPotentiallyUnhandledRejection = function(rejection) {
-			enqueue(report, rejection);
-		};
-
-		Promise.onPotentiallyUnhandledRejectionHandled = function(rejection) {
-			enqueue(unreport, rejection);
-		};
-
-		Promise.onFatalRejection = function(rejection) {
-			enqueue(throwit, rejection.value);
-		};
-
-		var tasks = [];
-		var reported = [];
-		var running = null;
-
-		function report(r) {
-			if(!r.handled) {
-				reported.push(r);
-				logError('Potentially unhandled rejection [' + r.id + '] ' + format.formatError(r.value));
-			}
-		}
-
-		function unreport(r) {
-			var i = reported.indexOf(r);
-			if(i >= 0) {
-				reported.splice(i, 1);
-				logInfo('Handled previous rejection [' + r.id + '] ' + format.formatObject(r.value));
-			}
-		}
-
-		function enqueue(f, x) {
-			tasks.push(f, x);
-			if(running === null) {
-				running = setTimer(flush, 0);
-			}
-		}
-
-		function flush() {
-			running = null;
-			while(tasks.length > 0) {
-				tasks.shift()(tasks.shift());
-			}
-		}
-
-		return Promise;
-	};
-
-	function throwit(e) {
-		throw e;
-	}
-
-	function noop() {}
-
-}).call(exports, __webpack_require__, exports, module),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-}(__webpack_require__(/*! !webpack amd define */ "./node_modules/webpack/buildin/amd-define.js")));
-
-
-/***/ }),
-
-/***/ "./node_modules/when/lib/decorators/with.js":
-/*!**************************************************!*\
-  !*** ./node_modules/when/lib/decorators/with.js ***!
-  \**************************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-var __WEBPACK_AMD_DEFINE_RESULT__;/** @license MIT License (c) copyright 2010-2014 original author or authors */
-/** @author Brian Cavalier */
-/** @author John Hann */
-
-(function(define) { 'use strict';
-!(__WEBPACK_AMD_DEFINE_RESULT__ = (function() {
-
-	return function addWith(Promise) {
-		/**
-		 * Returns a promise whose handlers will be called with `this` set to
-		 * the supplied receiver.  Subsequent promises derived from the
-		 * returned promise will also have their handlers called with receiver
-		 * as `this`. Calling `with` with undefined or no arguments will return
-		 * a promise whose handlers will again be called in the usual Promises/A+
-		 * way (no `this`) thus safely undoing any previous `with` in the
-		 * promise chain.
-		 *
-		 * WARNING: Promises returned from `with`/`withThis` are NOT Promises/A+
-		 * compliant, specifically violating 2.2.5 (http://promisesaplus.com/#point-41)
-		 *
-		 * @param {object} receiver `this` value for all handlers attached to
-		 *  the returned promise.
-		 * @returns {Promise}
-		 */
-		Promise.prototype['with'] = Promise.prototype.withThis = function(receiver) {
-			var p = this._beget();
-			var child = p._handler;
-			child.receiver = receiver;
-			this._handler.chain(child, receiver);
-			return p;
-		};
-
-		return Promise;
-	};
-
-}).call(exports, __webpack_require__, exports, module),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-}(__webpack_require__(/*! !webpack amd define */ "./node_modules/webpack/buildin/amd-define.js")));
-
-
-
-/***/ }),
-
-/***/ "./node_modules/when/lib/env.js":
-/*!**************************************!*\
-  !*** ./node_modules/when/lib/env.js ***!
-  \**************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-/* WEBPACK VAR INJECTION */(function(process) {var __WEBPACK_AMD_DEFINE_RESULT__;var require;/** @license MIT License (c) copyright 2010-2014 original author or authors */
-/** @author Brian Cavalier */
-/** @author John Hann */
-
-/*global process,document,setTimeout,clearTimeout,MutationObserver,WebKitMutationObserver*/
-(function(define) { 'use strict';
-!(__WEBPACK_AMD_DEFINE_RESULT__ = (function(require) {
-	/*jshint maxcomplexity:6*/
-
-	// Sniff "best" async scheduling option
-	// Prefer process.nextTick or MutationObserver, then check for
-	// setTimeout, and finally vertx, since its the only env that doesn't
-	// have setTimeout
-
-	var MutationObs;
-	var capturedSetTimeout = typeof setTimeout !== 'undefined' && setTimeout;
-
-	// Default env
-	var setTimer = function(f, ms) { return setTimeout(f, ms); };
-	var clearTimer = function(t) { return clearTimeout(t); };
-	var asap = function (f) { return capturedSetTimeout(f, 0); };
-
-	// Detect specific env
-	if (isNode()) { // Node
-		asap = function (f) { return process.nextTick(f); };
-
-	} else if (MutationObs = hasMutationObserver()) { // Modern browser
-		asap = initMutationObserver(MutationObs);
-
-	} else if (!capturedSetTimeout) { // vert.x
-		var vertxRequire = require;
-		var vertx = __webpack_require__(/*! vertx */ 0);
-		setTimer = function (f, ms) { return vertx.setTimer(ms, f); };
-		clearTimer = vertx.cancelTimer;
-		asap = vertx.runOnLoop || vertx.runOnContext;
-	}
-
-	return {
-		setTimer: setTimer,
-		clearTimer: clearTimer,
-		asap: asap
-	};
-
-	function isNode () {
-		return typeof process !== 'undefined' &&
-			Object.prototype.toString.call(process) === '[object process]';
-	}
-
-	function hasMutationObserver () {
-	    return (typeof MutationObserver !== 'undefined' && MutationObserver) ||
-			(typeof WebKitMutationObserver !== 'undefined' && WebKitMutationObserver);
-	}
-
-	function initMutationObserver(MutationObserver) {
-		var scheduled;
-		var node = document.createTextNode('');
-		var o = new MutationObserver(run);
-		o.observe(node, { characterData: true });
-
-		function run() {
-			var f = scheduled;
-			scheduled = void 0;
-			f();
-		}
-
-		var i = 0;
-		return function (f) {
-			scheduled = f;
-			node.data = (i ^= 1);
-		};
-	}
-}).call(exports, __webpack_require__, exports, module),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-}(__webpack_require__(/*! !webpack amd define */ "./node_modules/webpack/buildin/amd-define.js")));
-
-/* WEBPACK VAR INJECTION */}.call(this, __webpack_require__(/*! ./../../process/browser.js */ "./node_modules/process/browser.js")))
-
-/***/ }),
-
-/***/ "./node_modules/when/lib/format.js":
-/*!*****************************************!*\
-  !*** ./node_modules/when/lib/format.js ***!
-  \*****************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-var __WEBPACK_AMD_DEFINE_RESULT__;/** @license MIT License (c) copyright 2010-2014 original author or authors */
-/** @author Brian Cavalier */
-/** @author John Hann */
-
-(function(define) { 'use strict';
-!(__WEBPACK_AMD_DEFINE_RESULT__ = (function() {
-
-	return {
-		formatError: formatError,
-		formatObject: formatObject,
-		tryStringify: tryStringify
-	};
-
-	/**
-	 * Format an error into a string.  If e is an Error and has a stack property,
-	 * it's returned.  Otherwise, e is formatted using formatObject, with a
-	 * warning added about e not being a proper Error.
-	 * @param {*} e
-	 * @returns {String} formatted string, suitable for output to developers
-	 */
-	function formatError(e) {
-		var s = typeof e === 'object' && e !== null && (e.stack || e.message) ? e.stack || e.message : formatObject(e);
-		return e instanceof Error ? s : s + ' (WARNING: non-Error used)';
-	}
-
-	/**
-	 * Format an object, detecting "plain" objects and running them through
-	 * JSON.stringify if possible.
-	 * @param {Object} o
-	 * @returns {string}
-	 */
-	function formatObject(o) {
-		var s = String(o);
-		if(s === '[object Object]' && typeof JSON !== 'undefined') {
-			s = tryStringify(o, s);
-		}
-		return s;
-	}
-
-	/**
-	 * Try to return the result of JSON.stringify(x).  If that fails, return
-	 * defaultValue
-	 * @param {*} x
-	 * @param {*} defaultValue
-	 * @returns {String|*} JSON.stringify(x) or defaultValue
-	 */
-	function tryStringify(x, defaultValue) {
-		try {
-			return JSON.stringify(x);
-		} catch(e) {
-			return defaultValue;
-		}
-	}
-
-}).call(exports, __webpack_require__, exports, module),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-}(__webpack_require__(/*! !webpack amd define */ "./node_modules/webpack/buildin/amd-define.js")));
-
-
-/***/ }),
-
-/***/ "./node_modules/when/lib/makePromise.js":
-/*!**********************************************!*\
-  !*** ./node_modules/when/lib/makePromise.js ***!
-  \**********************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-/* WEBPACK VAR INJECTION */(function(process) {var __WEBPACK_AMD_DEFINE_RESULT__;/** @license MIT License (c) copyright 2010-2014 original author or authors */
-/** @author Brian Cavalier */
-/** @author John Hann */
-
-(function(define) { 'use strict';
-!(__WEBPACK_AMD_DEFINE_RESULT__ = (function() {
-
-	return function makePromise(environment) {
-
-		var tasks = environment.scheduler;
-		var emitRejection = initEmitRejection();
-
-		var objectCreate = Object.create ||
-			function(proto) {
-				function Child() {}
-				Child.prototype = proto;
-				return new Child();
-			};
-
-		/**
-		 * Create a promise whose fate is determined by resolver
-		 * @constructor
-		 * @returns {Promise} promise
-		 * @name Promise
-		 */
-		function Promise(resolver, handler) {
-			this._handler = resolver === Handler ? handler : init(resolver);
-		}
-
-		/**
-		 * Run the supplied resolver
-		 * @param resolver
-		 * @returns {Pending}
-		 */
-		function init(resolver) {
-			var handler = new Pending();
-
-			try {
-				resolver(promiseResolve, promiseReject, promiseNotify);
-			} catch (e) {
-				promiseReject(e);
-			}
-
-			return handler;
-
-			/**
-			 * Transition from pre-resolution state to post-resolution state, notifying
-			 * all listeners of the ultimate fulfillment or rejection
-			 * @param {*} x resolution value
-			 */
-			function promiseResolve (x) {
-				handler.resolve(x);
-			}
-			/**
-			 * Reject this promise with reason, which will be used verbatim
-			 * @param {Error|*} reason rejection reason, strongly suggested
-			 *   to be an Error type
-			 */
-			function promiseReject (reason) {
-				handler.reject(reason);
-			}
-
-			/**
-			 * @deprecated
-			 * Issue a progress event, notifying all progress listeners
-			 * @param {*} x progress event payload to pass to all listeners
-			 */
-			function promiseNotify (x) {
-				handler.notify(x);
-			}
-		}
-
-		// Creation
-
-		Promise.resolve = resolve;
-		Promise.reject = reject;
-		Promise.never = never;
-
-		Promise._defer = defer;
-		Promise._handler = getHandler;
-
-		/**
-		 * Returns a trusted promise. If x is already a trusted promise, it is
-		 * returned, otherwise returns a new trusted Promise which follows x.
-		 * @param  {*} x
-		 * @return {Promise} promise
-		 */
-		function resolve(x) {
-			return isPromise(x) ? x
-				: new Promise(Handler, new Async(getHandler(x)));
-		}
-
-		/**
-		 * Return a reject promise with x as its reason (x is used verbatim)
-		 * @param {*} x
-		 * @returns {Promise} rejected promise
-		 */
-		function reject(x) {
-			return new Promise(Handler, new Async(new Rejected(x)));
-		}
-
-		/**
-		 * Return a promise that remains pending forever
-		 * @returns {Promise} forever-pending promise.
-		 */
-		function never() {
-			return foreverPendingPromise; // Should be frozen
-		}
-
-		/**
-		 * Creates an internal {promise, resolver} pair
-		 * @private
-		 * @returns {Promise}
-		 */
-		function defer() {
-			return new Promise(Handler, new Pending());
-		}
-
-		// Transformation and flow control
-
-		/**
-		 * Transform this promise's fulfillment value, returning a new Promise
-		 * for the transformed result.  If the promise cannot be fulfilled, onRejected
-		 * is called with the reason.  onProgress *may* be called with updates toward
-		 * this promise's fulfillment.
-		 * @param {function=} onFulfilled fulfillment handler
-		 * @param {function=} onRejected rejection handler
-		 * @param {function=} onProgress @deprecated progress handler
-		 * @return {Promise} new promise
-		 */
-		Promise.prototype.then = function(onFulfilled, onRejected, onProgress) {
-			var parent = this._handler;
-			var state = parent.join().state();
-
-			if ((typeof onFulfilled !== 'function' && state > 0) ||
-				(typeof onRejected !== 'function' && state < 0)) {
-				// Short circuit: value will not change, simply share handler
-				return new this.constructor(Handler, parent);
-			}
-
-			var p = this._beget();
-			var child = p._handler;
-
-			parent.chain(child, parent.receiver, onFulfilled, onRejected, onProgress);
-
-			return p;
-		};
-
-		/**
-		 * If this promise cannot be fulfilled due to an error, call onRejected to
-		 * handle the error. Shortcut for .then(undefined, onRejected)
-		 * @param {function?} onRejected
-		 * @return {Promise}
-		 */
-		Promise.prototype['catch'] = function(onRejected) {
-			return this.then(void 0, onRejected);
-		};
-
-		/**
-		 * Creates a new, pending promise of the same type as this promise
-		 * @private
-		 * @returns {Promise}
-		 */
-		Promise.prototype._beget = function() {
-			return begetFrom(this._handler, this.constructor);
-		};
-
-		function begetFrom(parent, Promise) {
-			var child = new Pending(parent.receiver, parent.join().context);
-			return new Promise(Handler, child);
-		}
-
-		// Array combinators
-
-		Promise.all = all;
-		Promise.race = race;
-		Promise._traverse = traverse;
-
-		/**
-		 * Return a promise that will fulfill when all promises in the
-		 * input array have fulfilled, or will reject when one of the
-		 * promises rejects.
-		 * @param {array} promises array of promises
-		 * @returns {Promise} promise for array of fulfillment values
-		 */
-		function all(promises) {
-			return traverseWith(snd, null, promises);
-		}
-
-		/**
-		 * Array<Promise<X>> -> Promise<Array<f(X)>>
-		 * @private
-		 * @param {function} f function to apply to each promise's value
-		 * @param {Array} promises array of promises
-		 * @returns {Promise} promise for transformed values
-		 */
-		function traverse(f, promises) {
-			return traverseWith(tryCatch2, f, promises);
-		}
-
-		function traverseWith(tryMap, f, promises) {
-			var handler = typeof f === 'function' ? mapAt : settleAt;
-
-			var resolver = new Pending();
-			var pending = promises.length >>> 0;
-			var results = new Array(pending);
-
-			for (var i = 0, x; i < promises.length && !resolver.resolved; ++i) {
-				x = promises[i];
-
-				if (x === void 0 && !(i in promises)) {
-					--pending;
-					continue;
-				}
-
-				traverseAt(promises, handler, i, x, resolver);
-			}
-
-			if(pending === 0) {
-				resolver.become(new Fulfilled(results));
-			}
-
-			return new Promise(Handler, resolver);
-
-			function mapAt(i, x, resolver) {
-				if(!resolver.resolved) {
-					traverseAt(promises, settleAt, i, tryMap(f, x, i), resolver);
-				}
-			}
-
-			function settleAt(i, x, resolver) {
-				results[i] = x;
-				if(--pending === 0) {
-					resolver.become(new Fulfilled(results));
-				}
-			}
-		}
-
-		function traverseAt(promises, handler, i, x, resolver) {
-			if (maybeThenable(x)) {
-				var h = getHandlerMaybeThenable(x);
-				var s = h.state();
-
-				if (s === 0) {
-					h.fold(handler, i, void 0, resolver);
-				} else if (s > 0) {
-					handler(i, h.value, resolver);
-				} else {
-					resolver.become(h);
-					visitRemaining(promises, i+1, h);
-				}
-			} else {
-				handler(i, x, resolver);
-			}
-		}
-
-		Promise._visitRemaining = visitRemaining;
-		function visitRemaining(promises, start, handler) {
-			for(var i=start; i<promises.length; ++i) {
-				markAsHandled(getHandler(promises[i]), handler);
-			}
-		}
-
-		function markAsHandled(h, handler) {
-			if(h === handler) {
-				return;
-			}
-
-			var s = h.state();
-			if(s === 0) {
-				h.visit(h, void 0, h._unreport);
-			} else if(s < 0) {
-				h._unreport();
-			}
-		}
-
-		/**
-		 * Fulfill-reject competitive race. Return a promise that will settle
-		 * to the same state as the earliest input promise to settle.
-		 *
-		 * WARNING: The ES6 Promise spec requires that race()ing an empty array
-		 * must return a promise that is pending forever.  This implementation
-		 * returns a singleton forever-pending promise, the same singleton that is
-		 * returned by Promise.never(), thus can be checked with ===
-		 *
-		 * @param {array} promises array of promises to race
-		 * @returns {Promise} if input is non-empty, a promise that will settle
-		 * to the same outcome as the earliest input promise to settle. if empty
-		 * is empty, returns a promise that will never settle.
-		 */
-		function race(promises) {
-			if(typeof promises !== 'object' || promises === null) {
-				return reject(new TypeError('non-iterable passed to race()'));
-			}
-
-			// Sigh, race([]) is untestable unless we return *something*
-			// that is recognizable without calling .then() on it.
-			return promises.length === 0 ? never()
-				 : promises.length === 1 ? resolve(promises[0])
-				 : runRace(promises);
-		}
-
-		function runRace(promises) {
-			var resolver = new Pending();
-			var i, x, h;
-			for(i=0; i<promises.length; ++i) {
-				x = promises[i];
-				if (x === void 0 && !(i in promises)) {
-					continue;
-				}
-
-				h = getHandler(x);
-				if(h.state() !== 0) {
-					resolver.become(h);
-					visitRemaining(promises, i+1, h);
-					break;
-				} else {
-					h.visit(resolver, resolver.resolve, resolver.reject);
-				}
-			}
-			return new Promise(Handler, resolver);
-		}
-
-		// Promise internals
-		// Below this, everything is @private
-
-		/**
-		 * Get an appropriate handler for x, without checking for cycles
-		 * @param {*} x
-		 * @returns {object} handler
-		 */
-		function getHandler(x) {
-			if(isPromise(x)) {
-				return x._handler.join();
-			}
-			return maybeThenable(x) ? getHandlerUntrusted(x) : new Fulfilled(x);
-		}
-
-		/**
-		 * Get a handler for thenable x.
-		 * NOTE: You must only call this if maybeThenable(x) == true
-		 * @param {object|function|Promise} x
-		 * @returns {object} handler
-		 */
-		function getHandlerMaybeThenable(x) {
-			return isPromise(x) ? x._handler.join() : getHandlerUntrusted(x);
-		}
-
-		/**
-		 * Get a handler for potentially untrusted thenable x
-		 * @param {*} x
-		 * @returns {object} handler
-		 */
-		function getHandlerUntrusted(x) {
-			try {
-				var untrustedThen = x.then;
-				return typeof untrustedThen === 'function'
-					? new Thenable(untrustedThen, x)
-					: new Fulfilled(x);
-			} catch(e) {
-				return new Rejected(e);
-			}
-		}
-
-		/**
-		 * Handler for a promise that is pending forever
-		 * @constructor
-		 */
-		function Handler() {}
-
-		Handler.prototype.when
-			= Handler.prototype.become
-			= Handler.prototype.notify // deprecated
-			= Handler.prototype.fail
-			= Handler.prototype._unreport
-			= Handler.prototype._report
-			= noop;
-
-		Handler.prototype._state = 0;
-
-		Handler.prototype.state = function() {
-			return this._state;
-		};
-
-		/**
-		 * Recursively collapse handler chain to find the handler
-		 * nearest to the fully resolved value.
-		 * @returns {object} handler nearest the fully resolved value
-		 */
-		Handler.prototype.join = function() {
-			var h = this;
-			while(h.handler !== void 0) {
-				h = h.handler;
-			}
-			return h;
-		};
-
-		Handler.prototype.chain = function(to, receiver, fulfilled, rejected, progress) {
-			this.when({
-				resolver: to,
-				receiver: receiver,
-				fulfilled: fulfilled,
-				rejected: rejected,
-				progress: progress
-			});
-		};
-
-		Handler.prototype.visit = function(receiver, fulfilled, rejected, progress) {
-			this.chain(failIfRejected, receiver, fulfilled, rejected, progress);
-		};
-
-		Handler.prototype.fold = function(f, z, c, to) {
-			this.when(new Fold(f, z, c, to));
-		};
-
-		/**
-		 * Handler that invokes fail() on any handler it becomes
-		 * @constructor
-		 */
-		function FailIfRejected() {}
-
-		inherit(Handler, FailIfRejected);
-
-		FailIfRejected.prototype.become = function(h) {
-			h.fail();
-		};
-
-		var failIfRejected = new FailIfRejected();
-
-		/**
-		 * Handler that manages a queue of consumers waiting on a pending promise
-		 * @constructor
-		 */
-		function Pending(receiver, inheritedContext) {
-			Promise.createContext(this, inheritedContext);
-
-			this.consumers = void 0;
-			this.receiver = receiver;
-			this.handler = void 0;
-			this.resolved = false;
-		}
-
-		inherit(Handler, Pending);
-
-		Pending.prototype._state = 0;
-
-		Pending.prototype.resolve = function(x) {
-			this.become(getHandler(x));
-		};
-
-		Pending.prototype.reject = function(x) {
-			if(this.resolved) {
-				return;
-			}
-
-			this.become(new Rejected(x));
-		};
-
-		Pending.prototype.join = function() {
-			if (!this.resolved) {
-				return this;
-			}
-
-			var h = this;
-
-			while (h.handler !== void 0) {
-				h = h.handler;
-				if (h === this) {
-					return this.handler = cycle();
-				}
-			}
-
-			return h;
-		};
-
-		Pending.prototype.run = function() {
-			var q = this.consumers;
-			var handler = this.handler;
-			this.handler = this.handler.join();
-			this.consumers = void 0;
-
-			for (var i = 0; i < q.length; ++i) {
-				handler.when(q[i]);
-			}
-		};
-
-		Pending.prototype.become = function(handler) {
-			if(this.resolved) {
-				return;
-			}
-
-			this.resolved = true;
-			this.handler = handler;
-			if(this.consumers !== void 0) {
-				tasks.enqueue(this);
-			}
-
-			if(this.context !== void 0) {
-				handler._report(this.context);
-			}
-		};
-
-		Pending.prototype.when = function(continuation) {
-			if(this.resolved) {
-				tasks.enqueue(new ContinuationTask(continuation, this.handler));
-			} else {
-				if(this.consumers === void 0) {
-					this.consumers = [continuation];
-				} else {
-					this.consumers.push(continuation);
-				}
-			}
-		};
-
-		/**
-		 * @deprecated
-		 */
-		Pending.prototype.notify = function(x) {
-			if(!this.resolved) {
-				tasks.enqueue(new ProgressTask(x, this));
-			}
-		};
-
-		Pending.prototype.fail = function(context) {
-			var c = typeof context === 'undefined' ? this.context : context;
-			this.resolved && this.handler.join().fail(c);
-		};
-
-		Pending.prototype._report = function(context) {
-			this.resolved && this.handler.join()._report(context);
-		};
-
-		Pending.prototype._unreport = function() {
-			this.resolved && this.handler.join()._unreport();
-		};
-
-		/**
-		 * Wrap another handler and force it into a future stack
-		 * @param {object} handler
-		 * @constructor
-		 */
-		function Async(handler) {
-			this.handler = handler;
-		}
-
-		inherit(Handler, Async);
-
-		Async.prototype.when = function(continuation) {
-			tasks.enqueue(new ContinuationTask(continuation, this));
-		};
-
-		Async.prototype._report = function(context) {
-			this.join()._report(context);
-		};
-
-		Async.prototype._unreport = function() {
-			this.join()._unreport();
-		};
-
-		/**
-		 * Handler that wraps an untrusted thenable and assimilates it in a future stack
-		 * @param {function} then
-		 * @param {{then: function}} thenable
-		 * @constructor
-		 */
-		function Thenable(then, thenable) {
-			Pending.call(this);
-			tasks.enqueue(new AssimilateTask(then, thenable, this));
-		}
-
-		inherit(Pending, Thenable);
-
-		/**
-		 * Handler for a fulfilled promise
-		 * @param {*} x fulfillment value
-		 * @constructor
-		 */
-		function Fulfilled(x) {
-			Promise.createContext(this);
-			this.value = x;
-		}
-
-		inherit(Handler, Fulfilled);
-
-		Fulfilled.prototype._state = 1;
-
-		Fulfilled.prototype.fold = function(f, z, c, to) {
-			runContinuation3(f, z, this, c, to);
-		};
-
-		Fulfilled.prototype.when = function(cont) {
-			runContinuation1(cont.fulfilled, this, cont.receiver, cont.resolver);
-		};
-
-		var errorId = 0;
-
-		/**
-		 * Handler for a rejected promise
-		 * @param {*} x rejection reason
-		 * @constructor
-		 */
-		function Rejected(x) {
-			Promise.createContext(this);
-
-			this.id = ++errorId;
-			this.value = x;
-			this.handled = false;
-			this.reported = false;
-
-			this._report();
-		}
-
-		inherit(Handler, Rejected);
-
-		Rejected.prototype._state = -1;
-
-		Rejected.prototype.fold = function(f, z, c, to) {
-			to.become(this);
-		};
-
-		Rejected.prototype.when = function(cont) {
-			if(typeof cont.rejected === 'function') {
-				this._unreport();
-			}
-			runContinuation1(cont.rejected, this, cont.receiver, cont.resolver);
-		};
-
-		Rejected.prototype._report = function(context) {
-			tasks.afterQueue(new ReportTask(this, context));
-		};
-
-		Rejected.prototype._unreport = function() {
-			if(this.handled) {
-				return;
-			}
-			this.handled = true;
-			tasks.afterQueue(new UnreportTask(this));
-		};
-
-		Rejected.prototype.fail = function(context) {
-			this.reported = true;
-			emitRejection('unhandledRejection', this);
-			Promise.onFatalRejection(this, context === void 0 ? this.context : context);
-		};
-
-		function ReportTask(rejection, context) {
-			this.rejection = rejection;
-			this.context = context;
-		}
-
-		ReportTask.prototype.run = function() {
-			if(!this.rejection.handled && !this.rejection.reported) {
-				this.rejection.reported = true;
-				emitRejection('unhandledRejection', this.rejection) ||
-					Promise.onPotentiallyUnhandledRejection(this.rejection, this.context);
-			}
-		};
-
-		function UnreportTask(rejection) {
-			this.rejection = rejection;
-		}
-
-		UnreportTask.prototype.run = function() {
-			if(this.rejection.reported) {
-				emitRejection('rejectionHandled', this.rejection) ||
-					Promise.onPotentiallyUnhandledRejectionHandled(this.rejection);
-			}
-		};
-
-		// Unhandled rejection hooks
-		// By default, everything is a noop
-
-		Promise.createContext
-			= Promise.enterContext
-			= Promise.exitContext
-			= Promise.onPotentiallyUnhandledRejection
-			= Promise.onPotentiallyUnhandledRejectionHandled
-			= Promise.onFatalRejection
-			= noop;
-
-		// Errors and singletons
-
-		var foreverPendingHandler = new Handler();
-		var foreverPendingPromise = new Promise(Handler, foreverPendingHandler);
-
-		function cycle() {
-			return new Rejected(new TypeError('Promise cycle'));
-		}
-
-		// Task runners
-
-		/**
-		 * Run a single consumer
-		 * @constructor
-		 */
-		function ContinuationTask(continuation, handler) {
-			this.continuation = continuation;
-			this.handler = handler;
-		}
-
-		ContinuationTask.prototype.run = function() {
-			this.handler.join().when(this.continuation);
-		};
-
-		/**
-		 * Run a queue of progress handlers
-		 * @constructor
-		 */
-		function ProgressTask(value, handler) {
-			this.handler = handler;
-			this.value = value;
-		}
-
-		ProgressTask.prototype.run = function() {
-			var q = this.handler.consumers;
-			if(q === void 0) {
-				return;
-			}
-
-			for (var c, i = 0; i < q.length; ++i) {
-				c = q[i];
-				runNotify(c.progress, this.value, this.handler, c.receiver, c.resolver);
-			}
-		};
-
-		/**
-		 * Assimilate a thenable, sending it's value to resolver
-		 * @param {function} then
-		 * @param {object|function} thenable
-		 * @param {object} resolver
-		 * @constructor
-		 */
-		function AssimilateTask(then, thenable, resolver) {
-			this._then = then;
-			this.thenable = thenable;
-			this.resolver = resolver;
-		}
-
-		AssimilateTask.prototype.run = function() {
-			var h = this.resolver;
-			tryAssimilate(this._then, this.thenable, _resolve, _reject, _notify);
-
-			function _resolve(x) { h.resolve(x); }
-			function _reject(x)  { h.reject(x); }
-			function _notify(x)  { h.notify(x); }
-		};
-
-		function tryAssimilate(then, thenable, resolve, reject, notify) {
-			try {
-				then.call(thenable, resolve, reject, notify);
-			} catch (e) {
-				reject(e);
-			}
-		}
-
-		/**
-		 * Fold a handler value with z
-		 * @constructor
-		 */
-		function Fold(f, z, c, to) {
-			this.f = f; this.z = z; this.c = c; this.to = to;
-			this.resolver = failIfRejected;
-			this.receiver = this;
-		}
-
-		Fold.prototype.fulfilled = function(x) {
-			this.f.call(this.c, this.z, x, this.to);
-		};
-
-		Fold.prototype.rejected = function(x) {
-			this.to.reject(x);
-		};
-
-		Fold.prototype.progress = function(x) {
-			this.to.notify(x);
-		};
-
-		// Other helpers
-
-		/**
-		 * @param {*} x
-		 * @returns {boolean} true iff x is a trusted Promise
-		 */
-		function isPromise(x) {
-			return x instanceof Promise;
-		}
-
-		/**
-		 * Test just enough to rule out primitives, in order to take faster
-		 * paths in some code
-		 * @param {*} x
-		 * @returns {boolean} false iff x is guaranteed *not* to be a thenable
-		 */
-		function maybeThenable(x) {
-			return (typeof x === 'object' || typeof x === 'function') && x !== null;
-		}
-
-		function runContinuation1(f, h, receiver, next) {
-			if(typeof f !== 'function') {
-				return next.become(h);
-			}
-
-			Promise.enterContext(h);
-			tryCatchReject(f, h.value, receiver, next);
-			Promise.exitContext();
-		}
-
-		function runContinuation3(f, x, h, receiver, next) {
-			if(typeof f !== 'function') {
-				return next.become(h);
-			}
-
-			Promise.enterContext(h);
-			tryCatchReject3(f, x, h.value, receiver, next);
-			Promise.exitContext();
-		}
-
-		/**
-		 * @deprecated
-		 */
-		function runNotify(f, x, h, receiver, next) {
-			if(typeof f !== 'function') {
-				return next.notify(x);
-			}
-
-			Promise.enterContext(h);
-			tryCatchReturn(f, x, receiver, next);
-			Promise.exitContext();
-		}
-
-		function tryCatch2(f, a, b) {
-			try {
-				return f(a, b);
-			} catch(e) {
-				return reject(e);
-			}
-		}
-
-		/**
-		 * Return f.call(thisArg, x), or if it throws return a rejected promise for
-		 * the thrown exception
-		 */
-		function tryCatchReject(f, x, thisArg, next) {
-			try {
-				next.become(getHandler(f.call(thisArg, x)));
-			} catch(e) {
-				next.become(new Rejected(e));
-			}
-		}
-
-		/**
-		 * Same as above, but includes the extra argument parameter.
-		 */
-		function tryCatchReject3(f, x, y, thisArg, next) {
-			try {
-				f.call(thisArg, x, y, next);
-			} catch(e) {
-				next.become(new Rejected(e));
-			}
-		}
-
-		/**
-		 * @deprecated
-		 * Return f.call(thisArg, x), or if it throws, *return* the exception
-		 */
-		function tryCatchReturn(f, x, thisArg, next) {
-			try {
-				next.notify(f.call(thisArg, x));
-			} catch(e) {
-				next.notify(e);
-			}
-		}
-
-		function inherit(Parent, Child) {
-			Child.prototype = objectCreate(Parent.prototype);
-			Child.prototype.constructor = Child;
-		}
-
-		function snd(x, y) {
-			return y;
-		}
-
-		function noop() {}
-
-		function hasCustomEvent() {
-			if(typeof CustomEvent === 'function') {
-				try {
-					var ev = new CustomEvent('unhandledRejection');
-					return ev instanceof CustomEvent;
-				} catch (ignoredException) {}
-			}
-			return false;
-		}
-
-		function hasInternetExplorerCustomEvent() {
-			if(typeof document !== 'undefined' && typeof document.createEvent === 'function') {
-				try {
-					// Try to create one event to make sure it's supported
-					var ev = document.createEvent('CustomEvent');
-					ev.initCustomEvent('eventType', false, true, {});
-					return true;
-				} catch (ignoredException) {}
-			}
-			return false;
-		}
-
-		function initEmitRejection() {
-			/*global process, self, CustomEvent*/
-			if(typeof process !== 'undefined' && process !== null
-				&& typeof process.emit === 'function') {
-				// Returning falsy here means to call the default
-				// onPotentiallyUnhandledRejection API.  This is safe even in
-				// browserify since process.emit always returns falsy in browserify:
-				// https://github.com/defunctzombie/node-process/blob/master/browser.js#L40-L46
-				return function(type, rejection) {
-					return type === 'unhandledRejection'
-						? process.emit(type, rejection.value, rejection)
-						: process.emit(type, rejection);
-				};
-			} else if(typeof self !== 'undefined' && hasCustomEvent()) {
-				return (function (self, CustomEvent) {
-					return function (type, rejection) {
-						var ev = new CustomEvent(type, {
-							detail: {
-								reason: rejection.value,
-								key: rejection
-							},
-							bubbles: false,
-							cancelable: true
-						});
-
-						return !self.dispatchEvent(ev);
-					};
-				}(self, CustomEvent));
-			} else if(typeof self !== 'undefined' && hasInternetExplorerCustomEvent()) {
-				return (function(self, document) {
-					return function(type, rejection) {
-						var ev = document.createEvent('CustomEvent');
-						ev.initCustomEvent(type, false, true, {
-							reason: rejection.value,
-							key: rejection
-						});
-
-						return !self.dispatchEvent(ev);
-					};
-				}(self, document));
-			}
-
-			return noop;
-		}
-
-		return Promise;
-	};
-}).call(exports, __webpack_require__, exports, module),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-}(__webpack_require__(/*! !webpack amd define */ "./node_modules/webpack/buildin/amd-define.js")));
-
-/* WEBPACK VAR INJECTION */}.call(this, __webpack_require__(/*! ./../../process/browser.js */ "./node_modules/process/browser.js")))
-
-/***/ }),
-
-/***/ "./node_modules/when/lib/state.js":
-/*!****************************************!*\
-  !*** ./node_modules/when/lib/state.js ***!
-  \****************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-var __WEBPACK_AMD_DEFINE_RESULT__;/** @license MIT License (c) copyright 2010-2014 original author or authors */
-/** @author Brian Cavalier */
-/** @author John Hann */
-
-(function(define) { 'use strict';
-!(__WEBPACK_AMD_DEFINE_RESULT__ = (function() {
-
-	return {
-		pending: toPendingState,
-		fulfilled: toFulfilledState,
-		rejected: toRejectedState,
-		inspect: inspect
-	};
-
-	function toPendingState() {
-		return { state: 'pending' };
-	}
-
-	function toRejectedState(e) {
-		return { state: 'rejected', reason: e };
-	}
-
-	function toFulfilledState(x) {
-		return { state: 'fulfilled', value: x };
-	}
-
-	function inspect(handler) {
-		var state = handler.state();
-		return state === 0 ? toPendingState()
-			 : state > 0   ? toFulfilledState(handler.value)
-			               : toRejectedState(handler.value);
-	}
-
-}).call(exports, __webpack_require__, exports, module),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-}(__webpack_require__(/*! !webpack amd define */ "./node_modules/webpack/buildin/amd-define.js")));
-
-
-/***/ }),
-
-/***/ "./node_modules/when/when.js":
-/*!***********************************!*\
-  !*** ./node_modules/when/when.js ***!
-  \***********************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-var __WEBPACK_AMD_DEFINE_RESULT__;/** @license MIT License (c) copyright 2010-2014 original author or authors */
-
-/**
- * Promises/A+ and when() implementation
- * when is part of the cujoJS family of libraries (http://cujojs.com/)
- * @author Brian Cavalier
- * @author John Hann
- */
-(function(define) { 'use strict';
-!(__WEBPACK_AMD_DEFINE_RESULT__ = (function (require) {
-
-	var timed = __webpack_require__(/*! ./lib/decorators/timed */ "./node_modules/when/lib/decorators/timed.js");
-	var array = __webpack_require__(/*! ./lib/decorators/array */ "./node_modules/when/lib/decorators/array.js");
-	var flow = __webpack_require__(/*! ./lib/decorators/flow */ "./node_modules/when/lib/decorators/flow.js");
-	var fold = __webpack_require__(/*! ./lib/decorators/fold */ "./node_modules/when/lib/decorators/fold.js");
-	var inspect = __webpack_require__(/*! ./lib/decorators/inspect */ "./node_modules/when/lib/decorators/inspect.js");
-	var generate = __webpack_require__(/*! ./lib/decorators/iterate */ "./node_modules/when/lib/decorators/iterate.js");
-	var progress = __webpack_require__(/*! ./lib/decorators/progress */ "./node_modules/when/lib/decorators/progress.js");
-	var withThis = __webpack_require__(/*! ./lib/decorators/with */ "./node_modules/when/lib/decorators/with.js");
-	var unhandledRejection = __webpack_require__(/*! ./lib/decorators/unhandledRejection */ "./node_modules/when/lib/decorators/unhandledRejection.js");
-	var TimeoutError = __webpack_require__(/*! ./lib/TimeoutError */ "./node_modules/when/lib/TimeoutError.js");
-
-	var Promise = [array, flow, fold, generate, progress,
-		inspect, withThis, timed, unhandledRejection]
-		.reduce(function(Promise, feature) {
-			return feature(Promise);
-		}, __webpack_require__(/*! ./lib/Promise */ "./node_modules/when/lib/Promise.js"));
-
-	var apply = __webpack_require__(/*! ./lib/apply */ "./node_modules/when/lib/apply.js")(Promise);
-
-	// Public API
-
-	when.promise     = promise;              // Create a pending promise
-	when.resolve     = Promise.resolve;      // Create a resolved promise
-	when.reject      = Promise.reject;       // Create a rejected promise
-
-	when.lift        = lift;                 // lift a function to return promises
-	when['try']      = attempt;              // call a function and return a promise
-	when.attempt     = attempt;              // alias for when.try
-
-	when.iterate     = Promise.iterate;      // DEPRECATED (use cujojs/most streams) Generate a stream of promises
-	when.unfold      = Promise.unfold;       // DEPRECATED (use cujojs/most streams) Generate a stream of promises
-
-	when.join        = join;                 // Join 2 or more promises
-
-	when.all         = all;                  // Resolve a list of promises
-	when.settle      = settle;               // Settle a list of promises
-
-	when.any         = lift(Promise.any);    // One-winner race
-	when.some        = lift(Promise.some);   // Multi-winner race
-	when.race        = lift(Promise.race);   // First-to-settle race
-
-	when.map         = map;                  // Array.map() for promises
-	when.filter      = filter;               // Array.filter() for promises
-	when.reduce      = lift(Promise.reduce);       // Array.reduce() for promises
-	when.reduceRight = lift(Promise.reduceRight);  // Array.reduceRight() for promises
-
-	when.isPromiseLike = isPromiseLike;      // Is something promise-like, aka thenable
-
-	when.Promise     = Promise;              // Promise constructor
-	when.defer       = defer;                // Create a {promise, resolve, reject} tuple
-
-	// Error types
-
-	when.TimeoutError = TimeoutError;
-
-	/**
-	 * Get a trusted promise for x, or by transforming x with onFulfilled
-	 *
-	 * @param {*} x
-	 * @param {function?} onFulfilled callback to be called when x is
-	 *   successfully fulfilled.  If promiseOrValue is an immediate value, callback
-	 *   will be invoked immediately.
-	 * @param {function?} onRejected callback to be called when x is
-	 *   rejected.
-	 * @param {function?} onProgress callback to be called when progress updates
-	 *   are issued for x. @deprecated
-	 * @returns {Promise} a new promise that will fulfill with the return
-	 *   value of callback or errback or the completion value of promiseOrValue if
-	 *   callback and/or errback is not supplied.
-	 */
-	function when(x, onFulfilled, onRejected, onProgress) {
-		var p = Promise.resolve(x);
-		if (arguments.length < 2) {
-			return p;
-		}
-
-		return p.then(onFulfilled, onRejected, onProgress);
-	}
-
-	/**
-	 * Creates a new promise whose fate is determined by resolver.
-	 * @param {function} resolver function(resolve, reject, notify)
-	 * @returns {Promise} promise whose fate is determine by resolver
-	 */
-	function promise(resolver) {
-		return new Promise(resolver);
-	}
-
-	/**
-	 * Lift the supplied function, creating a version of f that returns
-	 * promises, and accepts promises as arguments.
-	 * @param {function} f
-	 * @returns {Function} version of f that returns promises
-	 */
-	function lift(f) {
-		return function() {
-			for(var i=0, l=arguments.length, a=new Array(l); i<l; ++i) {
-				a[i] = arguments[i];
-			}
-			return apply(f, this, a);
-		};
-	}
-
-	/**
-	 * Call f in a future turn, with the supplied args, and return a promise
-	 * for the result.
-	 * @param {function} f
-	 * @returns {Promise}
-	 */
-	function attempt(f /*, args... */) {
-		/*jshint validthis:true */
-		for(var i=0, l=arguments.length-1, a=new Array(l); i<l; ++i) {
-			a[i] = arguments[i+1];
-		}
-		return apply(f, this, a);
-	}
-
-	/**
-	 * Creates a {promise, resolver} pair, either or both of which
-	 * may be given out safely to consumers.
-	 * @return {{promise: Promise, resolve: function, reject: function, notify: function}}
-	 */
-	function defer() {
-		return new Deferred();
-	}
-
-	function Deferred() {
-		var p = Promise._defer();
-
-		function resolve(x) { p._handler.resolve(x); }
-		function reject(x) { p._handler.reject(x); }
-		function notify(x) { p._handler.notify(x); }
-
-		this.promise = p;
-		this.resolve = resolve;
-		this.reject = reject;
-		this.notify = notify;
-		this.resolver = { resolve: resolve, reject: reject, notify: notify };
-	}
-
-	/**
-	 * Determines if x is promise-like, i.e. a thenable object
-	 * NOTE: Will return true for *any thenable object*, and isn't truly
-	 * safe, since it may attempt to access the `then` property of x (i.e.
-	 *  clever/malicious getters may do weird things)
-	 * @param {*} x anything
-	 * @returns {boolean} true if x is promise-like
-	 */
-	function isPromiseLike(x) {
-		return x && typeof x.then === 'function';
-	}
-
-	/**
-	 * Return a promise that will resolve only once all the supplied arguments
-	 * have resolved. The resolution value of the returned promise will be an array
-	 * containing the resolution values of each of the arguments.
-	 * @param {...*} arguments may be a mix of promises and values
-	 * @returns {Promise}
-	 */
-	function join(/* ...promises */) {
-		return Promise.all(arguments);
-	}
-
-	/**
-	 * Return a promise that will fulfill once all input promises have
-	 * fulfilled, or reject when any one input promise rejects.
-	 * @param {array|Promise} promises array (or promise for an array) of promises
-	 * @returns {Promise}
-	 */
-	function all(promises) {
-		return when(promises, Promise.all);
-	}
-
-	/**
-	 * Return a promise that will always fulfill with an array containing
-	 * the outcome states of all input promises.  The returned promise
-	 * will only reject if `promises` itself is a rejected promise.
-	 * @param {array|Promise} promises array (or promise for an array) of promises
-	 * @returns {Promise} promise for array of settled state descriptors
-	 */
-	function settle(promises) {
-		return when(promises, Promise.settle);
-	}
-
-	/**
-	 * Promise-aware array map function, similar to `Array.prototype.map()`,
-	 * but input array may contain promises or values.
-	 * @param {Array|Promise} promises array of anything, may contain promises and values
-	 * @param {function(x:*, index:Number):*} mapFunc map function which may
-	 *  return a promise or value
-	 * @returns {Promise} promise that will fulfill with an array of mapped values
-	 *  or reject if any input promise rejects.
-	 */
-	function map(promises, mapFunc) {
-		return when(promises, function(promises) {
-			return Promise.map(promises, mapFunc);
-		});
-	}
-
-	/**
-	 * Filter the provided array of promises using the provided predicate.  Input may
-	 * contain promises and values
-	 * @param {Array|Promise} promises array of promises and values
-	 * @param {function(x:*, index:Number):boolean} predicate filtering predicate.
-	 *  Must return truthy (or promise for truthy) for items to retain.
-	 * @returns {Promise} promise that will fulfill with an array containing all items
-	 *  for which predicate returned truthy.
-	 */
-	function filter(promises, predicate) {
-		return when(promises, function(promises) {
-			return Promise.filter(promises, predicate);
-		});
-	}
-
-	return when;
-}).call(exports, __webpack_require__, exports, module),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-})(__webpack_require__(/*! !webpack amd define */ "./node_modules/webpack/buildin/amd-define.js"));
-
-
-/***/ }),
-
-/***/ "./src/main/js/api/uriListConverter.js":
-/*!*********************************************!*\
-  !*** ./src/main/js/api/uriListConverter.js ***!
-  \*********************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-var __WEBPACK_AMD_DEFINE_RESULT__;!(__WEBPACK_AMD_DEFINE_RESULT__ = (function () {
-  'use strict';
-  /* Convert a single or array of resources into "URI1\nURI2\nURI3..." */
-
-  return {
-    read: function read(str
-    /*, opts */
-    ) {
-      return str.split('\n');
-    },
-    write: function write(obj
-    /*, opts */
-    ) {
-      // If this is an Array, extract the self URI and then join using a newline
-      if (obj instanceof Array) {
-        return obj.map(function (resource) {
-          return resource._links.self.href;
-        }).join('\n');
-      } else {
-        // otherwise, just return the self URI
-        return obj._links.self.href;
-      }
-    }
-  };
-}).call(exports, __webpack_require__, exports, module),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-
-/***/ }),
-
-/***/ "./src/main/js/api/uriTemplateInterceptor.js":
-/*!***************************************************!*\
-  !*** ./src/main/js/api/uriTemplateInterceptor.js ***!
-  \***************************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-var __WEBPACK_AMD_DEFINE_RESULT__;!(__WEBPACK_AMD_DEFINE_RESULT__ = (function (require) {
-  'use strict';
-
-  var interceptor = __webpack_require__(/*! rest/interceptor */ "./node_modules/rest/interceptor.js");
-
-  return interceptor({
-    request: function request(_request
-    /*, config, meta */
-    ) {
-      /* If the URI is a URI Template per RFC 6570 (http://tools.ietf.org/html/rfc6570), trim out the template part */
-      if (_request.path.indexOf('{') === -1) {
-        return _request;
-      } else {
-        _request.path = _request.path.split('{')[0];
-        return _request;
-      }
-    }
-  });
-}).call(exports, __webpack_require__, exports, module),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-
-/***/ }),
-
 /***/ "./src/main/js/app.js":
 /*!****************************!*\
   !*** ./src/main/js/app.js ***!
@@ -38654,12 +35656,18 @@ var ReactDOM = __webpack_require__(/*! react-dom */ "./node_modules/react-dom/in
 
 var Fingerprint2 = __webpack_require__(/*! fingerprintjs2 */ "./node_modules/fingerprintjs2/fingerprint2.js");
 
-var client = __webpack_require__(/*! ./client */ "./src/main/js/client.js");
+var QrCode = __webpack_require__(/*! qrcode-generator */ "./node_modules/qrcode-generator/qrcode.js"); //const client = require('./client');
+
 
 var stompClient = __webpack_require__(/*! ./websocket-listener */ "./src/main/js/websocket-listener.js");
 
 var that;
 var fp;
+var qrSize = 4;
+var typeNumber = 4;
+var errorCorrectionLevel = 'L';
+var qr = QrCode(typeNumber, errorCorrectionLevel);
+var isChromium = window.chrome; //alert(isChromium)
 
 var App =
 /*#__PURE__*/
@@ -38711,6 +35719,10 @@ function (_React$Component) {
           transactions: payloadJson.transactions
         });
       }
+
+      qr.addData(payloadJson.receiveAddress);
+      qr.make();
+      document.getElementById('qrPlaceholder').innerHTML = qr.createImgTag(qrSize, qrSize * 4);
     }
   }, {
     key: "stompClientReady",
@@ -38729,22 +35741,6 @@ function (_React$Component) {
           'Accept': 'application/json',
           'Content-Type': 'application/json',
           'Fingerprint': fingerprint
-        }
-      }).then(function (response) {
-        console.log(response.status);
-      }, function (error) {
-        console.log(error.message);
-      });
-    }
-  }, {
-    key: "handleReboot",
-    value: function handleReboot(event) {
-      fetch('http://localhost:8080/reboot', {
-        method: 'POST',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-          'Fingerprint': fp
         }
       }).then(function (response) {
         console.log(response.status);
@@ -38791,10 +35787,17 @@ function (_React$Component) {
               return component.value;
             });
             var murmur = Fingerprint2.x64hash128(values.join(''), 31);
-            console.log(murmur);
-            fp = murmur;
+            console.log(murmur); // TODO: DEBUGGING
+            //fp = murmur;
+
+            if (isChromium) {
+              fp = murmur;
+            } else {
+              fp = ("" + Math.random()).replace(".", "");
+            }
+
             stompClient.register([{
-              route: '/topic/updateWallet-' + murmur,
+              route: '/topic/updateWallet-' + fp,
               callback: that.walletUpdate
             }], that.stompClientReady);
           });
@@ -38809,10 +35812,17 @@ function (_React$Component) {
             });
             var murmur = Fingerprint2.x64hash128(values.join(''), 31);
             console.log(murmur); // an array of components: {key: ..., value: ...}
+            // TODO: DEBUGGING
+            //fp = murmur;
 
-            fp = murmur;
+            if (isChromium) {
+              fp = murmur;
+            } else {
+              fp = "" + Math.random();
+            }
+
             stompClient.register([{
-              route: '/topic/updateWallet-' + murmur,
+              route: '/topic/updateWallet-' + fp,
               callback: that.walletUpdate
             }], that.stompClientReady);
           });
@@ -38836,9 +35846,7 @@ function (_React$Component) {
         id: "address",
         name: "address",
         type: "text"
-      }), React.createElement("button", null, "Send data!")), React.createElement("form", {
-        onSubmit: this.handleReboot
-      }, React.createElement("button", null, "reboot :(")), React.createElement("br", null), React.createElement("br", null), React.createElement("p", null, " transactionType | address | amount | timestamp | transactionId "), this.state.transactions.map(function (t) {
+      }), React.createElement("button", null, "Send data!")), React.createElement("br", null), React.createElement("br", null), React.createElement("p", null, " transactionType | address | amount | timestamp | transactionId "), this.state.transactions.map(function (t) {
         return React.createElement("p", null, t.transactionType, " ", t.amount, " -> ", t.address, " w transactionid: ", t.transactionId, " @ ", t.timestamp, " |  ", React.createElement("br", null), React.createElement("br", null), React.createElement("br", null), " ", t.debug);
       }), React.createElement("br", null));
     }
@@ -38848,41 +35856,6 @@ function (_React$Component) {
 }(React.Component);
 
 ReactDOM.render(React.createElement(App, null), document.getElementById('react'));
-
-/***/ }),
-
-/***/ "./src/main/js/client.js":
-/*!*******************************!*\
-  !*** ./src/main/js/client.js ***!
-  \*******************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
-
-
-var rest = __webpack_require__(/*! rest */ "./node_modules/rest/browser.js");
-
-var defaultRequest = __webpack_require__(/*! rest/interceptor/defaultRequest */ "./node_modules/rest/interceptor/defaultRequest.js");
-
-var mime = __webpack_require__(/*! rest/interceptor/mime */ "./node_modules/rest/interceptor/mime.js");
-
-var uriTemplateInterceptor = __webpack_require__(/*! ./api/uriTemplateInterceptor */ "./src/main/js/api/uriTemplateInterceptor.js");
-
-var errorCode = __webpack_require__(/*! rest/interceptor/errorCode */ "./node_modules/rest/interceptor/errorCode.js");
-
-var baseRegistry = __webpack_require__(/*! rest/mime/registry */ "./node_modules/rest/mime/registry.js");
-
-var registry = baseRegistry.child();
-registry.register('text/uri-list', __webpack_require__(/*! ./api/uriListConverter */ "./src/main/js/api/uriListConverter.js"));
-registry.register('application/hal+json', __webpack_require__(/*! rest/mime/type/application/hal */ "./node_modules/rest/mime/type/application/hal.js"));
-module.exports = rest.wrap(mime, {
-  registry: registry
-}).wrap(uriTemplateInterceptor).wrap(errorCode).wrap(defaultRequest, {
-  headers: {
-    'Accept': 'application/hal+json'
-  }
-});
 
 /***/ }),
 
@@ -38913,17 +35886,6 @@ function register(registrations, stompClientReady) {
 }
 
 module.exports.register = register;
-
-/***/ }),
-
-/***/ 0:
-/*!***********************!*\
-  !*** vertx (ignored) ***!
-  \***********************/
-/*! no static exports found */
-/***/ (function(module, exports) {
-
-/* (ignored) */
 
 /***/ })
 

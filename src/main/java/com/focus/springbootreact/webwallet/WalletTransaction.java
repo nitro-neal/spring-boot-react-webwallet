@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
 @Builder
 public class WalletTransaction {
     private  String transactionType;
-    private LocalDateTime timestamp;
+    private String timestamp;
     private String amount;
     private String address;
     private String transactionId;

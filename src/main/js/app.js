@@ -1,11 +1,21 @@
 const React = require('react');
 const ReactDOM = require('react-dom');
 const Fingerprint2 = require('fingerprintjs2')
-const client = require('./client');
+const QrCode = require('qrcode-generator')
+
+//const client = require('./client');
 
 var stompClient = require('./websocket-listener')
 var that;
 var fp;
+
+var qrSize = 4;
+var typeNumber = 4;
+var errorCorrectionLevel = 'L';
+var qr = QrCode(typeNumber, errorCorrectionLevel);
+
+var isChromium = window.chrome;
+//alert(isChromium)
 
 class App extends React.Component {
 
@@ -25,6 +35,10 @@ class App extends React.Component {
                 that.setState({hastransactions: true})
                 that.setState({transactions: payloadJson.transactions})
             }
+
+            qr.addData(payloadJson.receiveAddress);
+            qr.make();
+            document.getElementById('qrPlaceholder').innerHTML = qr.createImgTag(qrSize, qrSize * 4);
         }
 
     stompClientReady() {
@@ -46,21 +60,6 @@ class App extends React.Component {
           }, function(error) {
               console.log(error.message);
           });
-    }
-
-    handleReboot(event) {
-        fetch('http://localhost:8080/reboot', {
-          method: 'POST',
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-            'Fingerprint': fp
-          }
-        }).then(function(response) {
-            console.log(response.status);
-        }, function(error) {
-            console.log(error.message);
-        });
     }
 
     handleSubmit(event) {
@@ -98,10 +97,18 @@ class App extends React.Component {
                   var murmur = Fingerprint2.x64hash128(values.join(''), 31);
                   console.log(murmur);
 
+                  // TODO: DEBUGGING
                   fp = murmur;
+//                  if(isChromium) {
+//                    fp = murmur;
+//                  } else {
+//                    fp = ("" + Math.random()).replace(".","");
+//                  }
+
+
 
                   stompClient.register([
-                      {route: '/topic/updateWallet-' + murmur, callback: that.walletUpdate}
+                      {route: '/topic/updateWallet-' + fp, callback: that.walletUpdate}
                   ], that.stompClientReady);
 
                 })
@@ -114,10 +121,16 @@ class App extends React.Component {
                   var murmur = Fingerprint2.x64hash128(values.join(''), 31)
                   console.log(murmur) // an array of components: {key: ..., value: ...}
 
-                  fp = murmur;
+                   // TODO: DEBUGGING
+                    fp = murmur;
+//                    if(isChromium) {
+//                        fp = murmur;
+//                    } else {
+//                        fp = "" + Math.random();
+//                    }
 
                   stompClient.register([
-                      {route: '/topic/updateWallet-' + murmur, callback: that.walletUpdate}
+                      {route: '/topic/updateWallet-' + fp, callback: that.walletUpdate}
                   ], that.stompClientReady);
                 })
             }, 500)
@@ -141,10 +154,6 @@ class App extends React.Component {
                 <input id="address" name="address" type="text" />
 
                 <button>Send data!</button>
-            </form>
-
-            <form onSubmit={this.handleReboot}>
-                <button>reboot :(</button>
             </form>
 
             <br/>
