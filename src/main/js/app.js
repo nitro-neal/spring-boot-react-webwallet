@@ -47,7 +47,7 @@ class App extends React.Component {
     }
 
     initWallet(fingerprint) {
-        fetch('http://localhost:8080/initwallet', {
+        fetch('/initwallet', {
           method: "GET",
           headers: {
             'Accept': 'application/json',
@@ -70,7 +70,7 @@ class App extends React.Component {
         console.log("ABOUT TO SEND: " + data)
 
         //fetch('/api/form-submit-url', {
-        fetch('http://localhost:8080/sendCoins', {
+        fetch('/sendCoins', {
           method: 'POST',
           headers: {
             'Accept': 'application/json',

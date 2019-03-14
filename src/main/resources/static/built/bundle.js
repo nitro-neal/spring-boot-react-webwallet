@@ -35735,7 +35735,7 @@ function (_React$Component) {
   }, {
     key: "initWallet",
     value: function initWallet(fingerprint) {
-      fetch('http://localhost:8080/initwallet', {
+      fetch('/initwallet', {
         method: "GET",
         headers: {
           'Accept': 'application/json',
@@ -35759,7 +35759,7 @@ function (_React$Component) {
       });
       console.log("ABOUT TO SEND: " + data); //fetch('/api/form-submit-url', {
 
-      fetch('http://localhost:8080/sendCoins', {
+      fetch('/sendCoins', {
         method: 'POST',
         headers: {
           'Accept': 'application/json',
@@ -35788,13 +35788,12 @@ function (_React$Component) {
             });
             var murmur = Fingerprint2.x64hash128(values.join(''), 31);
             console.log(murmur); // TODO: DEBUGGING
-            //fp = murmur;
 
-            if (isChromium) {
-              fp = murmur;
-            } else {
-              fp = ("" + Math.random()).replace(".", "");
-            }
+            fp = murmur; //                  if(isChromium) {
+            //                    fp = murmur;
+            //                  } else {
+            //                    fp = ("" + Math.random()).replace(".","");
+            //                  }
 
             stompClient.register([{
               route: '/topic/updateWallet-' + fp,
@@ -35813,13 +35812,12 @@ function (_React$Component) {
             var murmur = Fingerprint2.x64hash128(values.join(''), 31);
             console.log(murmur); // an array of components: {key: ..., value: ...}
             // TODO: DEBUGGING
-            //fp = murmur;
 
-            if (isChromium) {
-              fp = murmur;
-            } else {
-              fp = "" + Math.random();
-            }
+            fp = murmur; //                    if(isChromium) {
+            //                        fp = murmur;
+            //                    } else {
+            //                        fp = "" + Math.random();
+            //                    }
 
             stompClient.register([{
               route: '/topic/updateWallet-' + fp,

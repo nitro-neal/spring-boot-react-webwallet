@@ -44,7 +44,7 @@ public class APIController {
     private static Map<String, WalletState> WALLET_STATES = new HashMap<>();
 
     private static int WALLET_COUNTER = 0;
-    private static int WALLET_COUNT = 100;
+    private static int WALLET_COUNT = 20;
 
     public static void RunOnBoot() throws Exception {
 
