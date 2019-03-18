@@ -1,5 +1,6 @@
 package com.focus.springbootreact.webwallet;
 
+import lombok.val;
 import org.bitcoinj.core.*;
 import org.bitcoinj.core.listeners.TransactionConfidenceEventListener;
 import org.bitcoinj.net.discovery.DnsDiscovery;
@@ -47,9 +48,19 @@ public class APIController {
     private static int WALLET_COUNT = 20;
     private static boolean LOAD_FROM_FILE = false;
 
+    private static Wallet MASTER_WALLET;
+
     public static void RunOnBoot() throws Exception {
 
         System.out.println("---------------------------- RUN ON BOOT STARTING...");
+
+        File masterWalletFile = new File("master-wallet");
+        if(masterWalletFile.exists()) {
+            MASTER_WALLET = Wallet.loadFromFile(masterWalletFile);
+        } else {
+            MASTER_WALLET = new Wallet(PARAMS);
+        }
+        MASTER_WALLET.allowSpendingUnconfirmedTransactions();
 
         for (int i = 0; i < WALLET_COUNT; i++) {
             Wallet w = null;
@@ -70,6 +81,7 @@ public class APIController {
         SHARED_PEER_GROUP = new PeerGroup(PARAMS, blockChain);
         SHARED_PEER_GROUP.addPeerDiscovery(new DnsDiscovery(PARAMS));
 
+        SHARED_PEER_GROUP.addWallet(MASTER_WALLET);
         for (Wallet w : AVAILABLE_WALLETS) {
             SHARED_PEER_GROUP.addWallet(w);
         }
@@ -80,11 +92,79 @@ public class APIController {
         //Start download blockchain
         SHARED_PEER_GROUP.downloadBlockChain();
 
+        MASTER_WALLET.saveToFile(new File("master-wallet"));
         for (int i = 0; i < WALLET_COUNT; i++) {
             AVAILABLE_WALLETS.get(i).saveToFile(new File("wallet-" + i));
         }
 
         System.out.println("---------------------------- RUN ON BOOT FINISHED AND READY!");
+
+
+        System.out.println("---------------------------- SEND MONEY TO MASTER WALLET");
+        System.out.println("---------------------------- "+ MASTER_WALLET.freshReceiveAddress().toBase58());
+    }
+
+    @RequestMapping(value = "/getMasterWalletInfo", method = RequestMethod.GET)
+    public String getMasterWalletInfo(){
+        System.out.println("getMasterWalletInfo called");
+        return MASTER_WALLET.freshReceiveAddress().toBase58() + " balance: " + MASTER_WALLET.getBalance(Wallet.BalanceType.ESTIMATED).toFriendlyString();
+    }
+
+    // Not used!
+    @RequestMapping(value = "/masterWalletGive", method = RequestMethod.GET)
+    public String masterWalletGive(){
+        System.out.println("masterWalletGive called");
+
+        Coin availBalance = MASTER_WALLET.getBalance(Wallet.BalanceType.ESTIMATED_SPENDABLE).minus(Coin.parseCoin(".001"));
+        System.out.println("Avail Balance:" + availBalance.toFriendlyString());
+        //Coin coinsToGiveToEach = availBalance.div(WALLET_COUNT);
+        Coin coinsToGiveToEach = Coin.parseCoin(".00015");
+
+        if(!coinsToGiveToEach.isGreaterThan(Coin.parseCoin(".0001"))) {
+            System.out.println("NOT ENOUGH COIN.. but will continue..");
+            //return "Not enough balance: " + availBalance.toFriendlyString();
+        }
+
+        for (Map.Entry<String, Wallet> walletEntry : WALLETS.entrySet()) {
+            Wallet wallet = walletEntry.getValue();
+
+            final Coin amountToSend = coinsToGiveToEach;
+            final Address addressToSend = Address.fromBase58(PARAMS, wallet.freshReceiveAddress().toBase58());
+
+            SendRequest req = SendRequest.to(addressToSend, amountToSend);
+            req.feePerKb = Coin.parseCoin("0.00001");
+
+            Wallet.SendResult sendResult = null;
+
+            try {
+                System.out.println("About to send coins...");
+                sendResult = MASTER_WALLET.sendCoins(SHARED_PEER_GROUP, req);
+                System.out.println("Finished sending coins waiting on callback...");
+            } catch (InsufficientMoneyException e) {
+                e.printStackTrace();
+            }
+
+            Transaction createdTx = sendResult.tx;
+            System.out.println("createdTx: " + createdTx);
+
+            final Wallet.SendResult finalSendResult = sendResult;
+            sendResult.broadcastComplete.addListener(new Runnable() {
+                @Override
+                public void run() {
+                    // The wallet has changed now, it'll get auto saved shortly or when the app shuts down.
+                    //walletStates.get(fingerprint).setBalance(wallets.get(fingerprint).wallet().getBalance().toFriendlyString());
+                    //sendWebWalletUpdate(fingerprint);
+                    System.out.println("Sent coins onwards! Transaction hash is " + finalSendResult.tx.getHashAsString());
+                }
+            }, new Executor() {
+                @Override
+                public void execute(Runnable command) {
+
+                }
+            });
+        }
+
+        return "Master wallet sent to other wallets";
     }
 
     @RequestMapping(value = "/initwallet", method = RequestMethod.GET)
@@ -117,10 +197,12 @@ public class APIController {
 
         addListeners(w, fingerprint);
 
+        Address address = w.freshReceiveAddress();
+
         WalletState walletState = WalletState.builder()
                 .message("New Wallet")
-                .balance(getFormattedBalance(w.getBalance()))
-                .receiveAddress(w.freshReceiveAddress().toBase58())
+                .balance(getFormattedBalance(w.getBalance(Wallet.BalanceType.ESTIMATED)))
+                .receiveAddress(address.toBase58())
                 .transactions(new ArrayList<>())
                 .build();
 
@@ -129,6 +211,41 @@ public class APIController {
         System.out.println(" --------------------- WALLET STATES READY! ---------------- FOR : " + fingerprint);
 
         sendWebWalletUpdate(fingerprint);
+
+        System.out.println(" --------------------- LOADING SOME BTC ON WALLET STATES READY! ---------------- FOR : " + fingerprint);
+
+
+        SendRequest req = SendRequest.to(address, Coin.parseCoin((".0000321")));
+        req.feePerKb = Coin.parseCoin("0.00001");
+
+        Wallet.SendResult sendResult = null;
+
+        try {
+            System.out.println("About to send coins...");
+            sendResult = MASTER_WALLET.sendCoins(SHARED_PEER_GROUP, req);
+            System.out.println("Finished sending coins waiting on callback...");
+        } catch (InsufficientMoneyException e) {
+            e.printStackTrace();
+        }
+
+        Transaction createdTx = sendResult.tx;
+        System.out.println("createdTx: " + createdTx);
+
+        final Wallet.SendResult finalSendResult = sendResult;
+        sendResult.broadcastComplete.addListener(new Runnable() {
+            @Override
+            public void run() {
+                // The wallet has changed now, it'll get auto saved shortly or when the app shuts down.
+                //walletStates.get(fingerprint).setBalance(wallets.get(fingerprint).wallet().getBalance().toFriendlyString());
+                //sendWebWalletUpdate(fingerprint);
+                System.out.println("Sent coins onwards! Transaction hash is " + finalSendResult.tx.getHashAsString());
+            }
+        }, new Executor() {
+            @Override
+            public void execute(Runnable command) {
+
+            }
+        });
     }
 
     @RequestMapping(value = "/sendCoins", method = RequestMethod.POST)
