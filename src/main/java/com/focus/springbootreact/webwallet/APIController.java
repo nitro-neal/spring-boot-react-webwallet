@@ -45,6 +45,7 @@ public class APIController {
 
     private static int WALLET_COUNTER = 0;
     private static int WALLET_COUNT = 20;
+    private static boolean LOAD_FROM_FILE = false;
 
     public static void RunOnBoot() throws Exception {
 
@@ -52,8 +53,8 @@ public class APIController {
 
         for (int i = 0; i < WALLET_COUNT; i++) {
             Wallet w = null;
-            File file = new File("./wallets/wallet-" + i);
-            if(file.exists()) {
+            File file = new File("wallet-" + i);
+            if(LOAD_FROM_FILE && file.exists()) {
                 System.out.println("Loading wallet from file.. ");
                 w = Wallet.loadFromFile(file);
             } else {
@@ -75,20 +76,15 @@ public class APIController {
 
         //Starting peerGroup;
         SHARED_PEER_GROUP.startAsync();
-        //peerGroup.
 
         //Start download blockchain
         SHARED_PEER_GROUP.downloadBlockChain();
-
 
         for (int i = 0; i < WALLET_COUNT; i++) {
             AVAILABLE_WALLETS.get(i).saveToFile(new File("wallet-" + i));
         }
 
-
         System.out.println("---------------------------- RUN ON BOOT FINISHED AND READY!");
-
-
     }
 
     @RequestMapping(value = "/initwallet", method = RequestMethod.GET)
@@ -104,7 +100,6 @@ public class APIController {
 
         FINGERPRINTS.add(fingerprint);
         setupWalletForFingeprint(fingerprint);
-
 
         return ResponseEntity.ok().build();
     }
@@ -124,7 +119,7 @@ public class APIController {
 
         WalletState walletState = WalletState.builder()
                 .message("New Wallet")
-                .balance(w.getBalance().toFriendlyString())
+                .balance(getFormattedBalance(w.getBalance()))
                 .receiveAddress(w.freshReceiveAddress().toBase58())
                 .transactions(new ArrayList<>())
                 .build();
@@ -142,7 +137,7 @@ public class APIController {
         System.out.println("sendCoins called for fingerprint: " + fingerprint + " with amount: " + sendRequest.amount + " and address: " + sendRequest.address);
 
         if(WALLETS.get(fingerprint) == null || sendRequest.amount == null || sendRequest.address == null) {
-            System.out.println("Invalid request or something is null: " + WALLETS.get(fingerprint) +  sendRequest.amount);
+            System.out.println("Invalid request or input is null: " + WALLETS.get(fingerprint) +  sendRequest.amount);
             return ResponseEntity.badRequest().build();
         }
 
@@ -208,17 +203,17 @@ public class APIController {
                 String addressInTransaction = transactionExplorer.getFromAddress(tx, wallet) + " -> " + transactionExplorer.getSentToAddressFromOutput(tx, wallet);
 
                 WalletTransaction transaction = WalletTransaction.builder()
-                        .transactionType("receive")
+                        .transactionType("received")
                         .transactionId(tx.getHashAsString())
                         .timestamp(now)
                         .address(addressInTransaction)
-                        .amount(newBalance.minus(prevBalance).toFriendlyString())
+                        .amount(getFormattedBalance(newBalance.minus(prevBalance)))
                         //.debug("tx.getValueSentTome! :" + value.toFriendlyString() + " prevBalance: " + prevBalance.toFriendlyString() + " newBalance: " + newBalance.toFriendlyString() + "tx: " + tx)
                         .build();
 
                 // Add to firest of list
                 WALLET_STATES.get(fingerprint).getTransactions().add(0, transaction);
-                WALLET_STATES.get(fingerprint).setBalance(newBalance.toFriendlyString());
+                WALLET_STATES.get(fingerprint).setBalance(getFormattedBalance(newBalance));
                 sendWebWalletUpdate(fingerprint);
             }
         });
@@ -234,16 +229,16 @@ public class APIController {
                 String addressInTransaction = transactionExplorer.getSentToAddress(tx, wallet, prevBalance.minus(newBalance).minus(Coin.parseCoin(".00001")));
 
                 WalletTransaction transaction = WalletTransaction.builder()
-                        .transactionType("send")
+                        .transactionType("sent")
                         .transactionId(tx.getHashAsString())
                         .timestamp(now)
                         .address(addressInTransaction)
-                        .amount(prevBalance.minus(newBalance).toFriendlyString())
+                        .amount(getFormattedBalance(prevBalance.minus(newBalance)))
                         //.debug(transactionDebug + " !!!!!!! tx.getValueSentTome! :" + value.toFriendlyString() + "prevBalance: " + prevBalance.toFriendlyString() + " newBalance: " + newBalance.toFriendlyString() + "tx: " + tx)
                         .build();
 
                 WALLET_STATES.get(fingerprint).getTransactions().add(0, transaction);
-                WALLET_STATES.get(fingerprint).setBalance(newBalance.toFriendlyString());
+                WALLET_STATES.get(fingerprint).setBalance(getFormattedBalance(newBalance));
                 sendWebWalletUpdate(fingerprint);
             }
         });
@@ -280,5 +275,9 @@ public class APIController {
         }
         websocket.convertAndSend(WebSocketConfiguration.MESSAGE_PREFIX + "/updateWallet-" + fingerprint, WALLET_STATES.get(fingerprint));
 
+    }
+
+    private String getFormattedBalance(Coin balance) {
+        return balance.toFriendlyString().replace("BTC","");
     }
 }

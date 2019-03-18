@@ -2,10 +2,8 @@ const React = require('react');
 const ReactDOM = require('react-dom');
 const Fingerprint2 = require('fingerprintjs2')
 const QrCode = require('qrcode-generator')
-
-//const client = require('./client');
-
 var stompClient = require('./websocket-listener')
+
 var that;
 var fp;
 
@@ -15,7 +13,6 @@ var errorCorrectionLevel = 'L';
 var qr = QrCode(typeNumber, errorCorrectionLevel);
 
 var isChromium = window.chrome;
-//alert(isChromium)
 
 class App extends React.Component {
 
@@ -26,11 +23,12 @@ class App extends React.Component {
 	}
 
 	walletUpdate(payload) {
-            console.log("Walletupdate called with MYPAYLOAD:" + payload)
+            console.log("Payload:" + payload)
             var payloadJson = JSON.parse(payload.body)
 
             that.setState({receiveAddress: payloadJson.receiveAddress});
             that.setState({balance: payloadJson.balance});
+
             if(payloadJson.transactions.length > 0){
                 that.setState({hastransactions: true})
                 that.setState({transactions: payloadJson.transactions})
@@ -69,7 +67,6 @@ class App extends React.Component {
         var data = JSON.stringify({"amount": event.target[0].value, "address": event.target[1].value});
         console.log("ABOUT TO SEND: " + data)
 
-        //fetch('/api/form-submit-url', {
         fetch('/sendCoins', {
           method: 'POST',
           headers: {
@@ -105,8 +102,6 @@ class App extends React.Component {
 //                    fp = ("" + Math.random()).replace(".","");
 //                  }
 
-
-
                   stompClient.register([
                       {route: '/topic/updateWallet-' + fp, callback: that.walletUpdate}
                   ], that.stompClientReady);
@@ -140,32 +135,69 @@ class App extends React.Component {
 	render() {
 		return (
           <div>
-            <p> Message: {this.state.message} </p>
-            <p> Fingerprint: {this.state.fingerprint} </p>
-            <p> Receive Address : {this.state.receiveAddress} </p>
-            <p> Balance : {this.state.balance} </p>
-            <br/>
+              
+            <div class="content-center">
+                <h1>Bit Burn Wallet</h1>
+                <h3> {this.state.balance} BTCt</h3>
+                <button type="button" class="btn btn-lg btn-primary" data-toggle="modal" data-target="#sendModal">Send   </button>
+                <button type="button" class="btn btn-lg btn-primary" data-toggle="modal" data-target="#receiveModal">Receive</button>
+                
+                <br/>
+                <br/>
+                <br/>
+                    
+                {this.state.transactions.map((t) => <div class="row"> <div class="col"><span> {t.transactionType} </span></div> <div class="col"><span>{t.amount}</span></div></div>)}
 
-            <form onSubmit={this.handleSubmit}>
-                <label htmlFor="amount">Enter amount</label>
-                <input id="amount" name="amount" type="text" />
+            </div>
+            
+            <div class="modal fade" id="sendModal" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+                <div class="modal-dialog" role="document">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="exampleModalLabel">Send BTCt</h5>
+                            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                            </button>
+                        </div>
+                        <div class="modal-body">
+                            <form onSubmit={this.handleSubmit}>
+                                <div class="form-group">
+                                    <label class ="blackcolor" htmlFor="amount">Amount</label>
+                                    <input name="amount" type="text" class="form-control blackcolor" id="amount" aria-describedby="emailHelp" placeholder="Enter amount"/>
+                                </div>
+                                <div class="form-group">
+                                    <label class ="blackcolor" htmlFor="address">Address</label>
+                                    <input name="address" type="text" class="form-control blackcolor" id="address" aria-describedby="emailHelp" placeholder="Enter address"/>
+                                </div>
+                                <button type="submit" class="btn btn-primary">Send</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
-                <label htmlFor="address">Enter address</label>
-                <input id="address" name="address" type="text" />
-
-                <button>Send data!</button>
-            </form>
-
-            <br/>
-            <br/>
-            <p> transactionType | address | amount | timestamp | transactionId </p>
-
-            {this.state.transactions.map((t) => <p>{t.transactionType} { t.amount } -> { t.address } w transactionid: { t.transactionId } @ { t.timestamp } |  <br/><br/><br/> {t.debug}</p>)}
-
-
-            <br/>
-
-
+            <div class="modal fade" id="receiveModal" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+                <div class="modal-dialog" role="document">
+                    <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="exampleModalLabel">Receive BTCt</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert alert-primary" role="alert">
+                            ONLY SEND TESTNET BITCOINS TO THIS ADDRESS!
+                        </div>
+                        <p> Receive Address: {this.state.receiveAddress} </p>
+                        <div id="qrPlaceholder"></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                    </div>
+                    </div>
+                </div>
+            </div>
           </div>
 		)
 	}
