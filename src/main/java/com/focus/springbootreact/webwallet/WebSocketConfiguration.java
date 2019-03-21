@@ -14,7 +14,7 @@ public class WebSocketConfiguration implements WebSocketMessageBrokerConfigurer 
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        registry.addEndpoint("/webwallet").withSockJS();
+        registry.addEndpoint("/webwallet").setAllowedOrigins("*").withSockJS();
     }
 
     @Override

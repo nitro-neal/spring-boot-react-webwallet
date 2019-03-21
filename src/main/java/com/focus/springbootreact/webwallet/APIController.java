@@ -1,5 +1,9 @@
 package com.focus.springbootreact.webwallet;
 
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.ValueEventListener;
 import lombok.val;
 import org.bitcoinj.core.*;
 import org.bitcoinj.core.listeners.TransactionConfidenceEventListener;
@@ -33,6 +37,8 @@ public class APIController {
     @Autowired
     SimpMessagingTemplate websocket;
 
+    private Firebase firebaseApp = new Firebase();
+    private DatabaseReference usersRef = firebaseApp.getDatabaseReference().child("users");
     private TransactionExplorer transactionExplorer = new TransactionExplorer();
 
     private static final File BLOCKCHAIN_FILE = new File("runonboot-block.dat");
@@ -110,62 +116,6 @@ public class APIController {
         return MASTER_WALLET.freshReceiveAddress().toBase58() + " balance: " + MASTER_WALLET.getBalance(Wallet.BalanceType.ESTIMATED).toFriendlyString();
     }
 
-    // Not used!
-    @RequestMapping(value = "/masterWalletGive", method = RequestMethod.GET)
-    public String masterWalletGive(){
-        System.out.println("masterWalletGive called");
-
-        Coin availBalance = MASTER_WALLET.getBalance(Wallet.BalanceType.ESTIMATED_SPENDABLE).minus(Coin.parseCoin(".001"));
-        System.out.println("Avail Balance:" + availBalance.toFriendlyString());
-        //Coin coinsToGiveToEach = availBalance.div(WALLET_COUNT);
-        Coin coinsToGiveToEach = Coin.parseCoin(".00015");
-
-        if(!coinsToGiveToEach.isGreaterThan(Coin.parseCoin(".0001"))) {
-            System.out.println("NOT ENOUGH COIN.. but will continue..");
-            //return "Not enough balance: " + availBalance.toFriendlyString();
-        }
-
-        for (Map.Entry<String, Wallet> walletEntry : WALLETS.entrySet()) {
-            Wallet wallet = walletEntry.getValue();
-
-            final Coin amountToSend = coinsToGiveToEach;
-            final Address addressToSend = Address.fromBase58(PARAMS, wallet.freshReceiveAddress().toBase58());
-
-            SendRequest req = SendRequest.to(addressToSend, amountToSend);
-            req.feePerKb = Coin.parseCoin("0.00001");
-
-            Wallet.SendResult sendResult = null;
-
-            try {
-                System.out.println("About to send coins...");
-                sendResult = MASTER_WALLET.sendCoins(SHARED_PEER_GROUP, req);
-                System.out.println("Finished sending coins waiting on callback...");
-            } catch (InsufficientMoneyException e) {
-                e.printStackTrace();
-            }
-
-            Transaction createdTx = sendResult.tx;
-            System.out.println("createdTx: " + createdTx);
-
-            final Wallet.SendResult finalSendResult = sendResult;
-            sendResult.broadcastComplete.addListener(new Runnable() {
-                @Override
-                public void run() {
-                    // The wallet has changed now, it'll get auto saved shortly or when the app shuts down.
-                    //walletStates.get(fingerprint).setBalance(wallets.get(fingerprint).wallet().getBalance().toFriendlyString());
-                    //sendWebWalletUpdate(fingerprint);
-                    System.out.println("Sent coins onwards! Transaction hash is " + finalSendResult.tx.getHashAsString());
-                }
-            }, new Executor() {
-                @Override
-                public void execute(Runnable command) {
-
-                }
-            });
-        }
-
-        return "Master wallet sent to other wallets";
-    }
 
     @RequestMapping(value = "/initwallet", method = RequestMethod.GET)
     public ResponseEntity<String> initwallet(@RequestHeader(value = "Fingerprint", required = true) String fingerprint) {
@@ -180,6 +130,28 @@ public class APIController {
 
         FINGERPRINTS.add(fingerprint);
         setupWalletForFingeprint(fingerprint);
+
+        DatabaseReference fingerprintRef = usersRef.child(fingerprint);
+        ValueEventListener eventListener = new ValueEventListener() {
+            @Override
+            public void onDataChange(DataSnapshot dataSnapshot) {
+                if(!dataSnapshot.exists()) {
+                    //create new user
+                    Map<String, User> users = new HashMap<>();
+                    User user = new User(fingerprint, WALLET_STATES.get(fingerprint).getBalance(), "0","0");
+                    users.put(fingerprint, user);
+                    fingerprintRef.setValueAsync(user);
+                    fingerprintRef.push();
+                }
+            }
+
+            @Override
+            public void onCancelled(DatabaseError databaseError) {
+                //Log.d(TAG, databaseError.getMessage()); //Don't ignore errors!
+            }
+        };
+
+        fingerprintRef.addListenerForSingleValueEvent(eventListener);
 
         return ResponseEntity.ok().build();
     }
@@ -215,7 +187,7 @@ public class APIController {
         System.out.println(" --------------------- LOADING SOME BTC ON WALLET STATES READY! ---------------- FOR : " + fingerprint);
 
 
-        SendRequest req = SendRequest.to(address, Coin.parseCoin((".0000321")));
+        SendRequest req = SendRequest.to(address, Coin.parseCoin((".0001337")));
         req.feePerKb = Coin.parseCoin("0.00001");
 
         Wallet.SendResult sendResult = null;
@@ -226,6 +198,7 @@ public class APIController {
             System.out.println("Finished sending coins waiting on callback...");
         } catch (InsufficientMoneyException e) {
             e.printStackTrace();
+            return;
         }
 
         Transaction createdTx = sendResult.tx;
@@ -259,6 +232,18 @@ public class APIController {
         }
 
         sendCoinsToAddress(fingerprint, sendRequest.amount, sendRequest.address);
+
+        DatabaseReference fingerprintRef = usersRef.child(fingerprint);
+        System.out.println("!!!!!! receive count Kye!!" + fingerprintRef.child("receivedCount").getKey());
+        Integer count = Integer.parseInt(fingerprintRef.child("receivedCount").getKey());
+
+        if(count == null) {
+            count = -99;
+        }
+
+        Map<String, Object> fingerprintUpdates = new HashMap<>();
+        fingerprintUpdates.put("receivedCount", "" + count);
+        fingerprintRef.updateChildrenAsync(fingerprintUpdates);
 
         return ResponseEntity.ok().build();
     }
