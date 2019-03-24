@@ -51,7 +51,7 @@ public class APIController {
     private static Map<String, WalletState> WALLET_STATES = new HashMap<>();
 
     private static int WALLET_COUNTER = 0;
-    private static int WALLET_COUNT = 20;
+    private static int WALLET_COUNT = 50;
     private static boolean LOAD_FROM_FILE = false;
 
     private static Wallet MASTER_WALLET;
@@ -122,7 +122,6 @@ public class APIController {
         System.out.println("initwallet called for fingerprint: " + fingerprint);
 
         if(FINGERPRINTS.contains(fingerprint)) {
-
             //WALLETS.get(fingerprint).cleanup();
             sendWebWalletUpdate(fingerprint);
             return ResponseEntity.ok().build();
@@ -233,17 +232,17 @@ public class APIController {
 
         sendCoinsToAddress(fingerprint, sendRequest.amount, sendRequest.address);
 
-        DatabaseReference fingerprintRef = usersRef.child(fingerprint);
-        System.out.println("!!!!!! receive count Kye!!" + fingerprintRef.child("receivedCount").getKey());
-        Integer count = Integer.parseInt(fingerprintRef.child("receivedCount").getKey());
-
-        if(count == null) {
-            count = -99;
-        }
-
-        Map<String, Object> fingerprintUpdates = new HashMap<>();
-        fingerprintUpdates.put("receivedCount", "" + count);
-        fingerprintRef.updateChildrenAsync(fingerprintUpdates);
+//        DatabaseReference fingerprintRef = usersRef.child(fingerprint);
+//        System.out.println("!!!!!! receive count Kye!!" + fingerprintRef.child("receivedCount").getKey());
+//        Integer count = Integer.parseInt(fingerprintRef.child("receivedCount").getKey());
+//
+//        if(count == null) {
+//            count = -99;
+//        }
+//
+//        Map<String, Object> fingerprintUpdates = new HashMap<>();
+//        fingerprintUpdates.put("receivedCount", "" + count);
+//        fingerprintRef.updateChildrenAsync(fingerprintUpdates);
 
         return ResponseEntity.ok().build();
     }
@@ -302,7 +301,8 @@ public class APIController {
                 DateTimeFormatter formatter4 = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM);
                 String now = formatter4.format(LocalDateTime.now());
 
-                String addressInTransaction = transactionExplorer.getFromAddress(tx, wallet) + " -> " + transactionExplorer.getSentToAddressFromOutput(tx, wallet);
+                //String addressInTransaction = transactionExplorer.getFromAddress(tx, wallet) + " -> " + transactionExplorer.getSentToAddressFromOutput(tx, wallet);
+                String addressInTransaction = transactionExplorer.getFromAddress(tx, wallet);
 
                 WalletTransaction transaction = WalletTransaction.builder()
                         .transactionType("received")
