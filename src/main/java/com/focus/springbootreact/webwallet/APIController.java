@@ -51,7 +51,7 @@ public class APIController {
     private static Map<String, WalletState> WALLET_STATES = new HashMap<>();
 
     private static int WALLET_COUNTER = 0;
-    private static int WALLET_COUNT = 50;
+    private static int WALLET_COUNT = 200;
     private static boolean LOAD_FROM_FILE = false;
 
     private static Wallet MASTER_WALLET;
